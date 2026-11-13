@@ -1,16 +1,14 @@
-import { Button, Card, EmptyState, Header, Screen, Text, formatRelativeTime, useTheme, useToast } from '@basalt/core';
-import { useRouter } from 'expo-router';
+import { Appear, Button, Card, EmptyState, Hero, Screen, StatTile, TAB_BAR_SPACE, Text, formatRelativeTime, useTheme, useToast } from '@basalt/core';
 import { CircleAlert, CircleCheck, CircleMinus, History, Trash2 } from 'lucide-react-native';
 import React from 'react';
 import { Alert, View } from 'react-native';
-import { ACTION_LABELS } from '../lib/describe';
-import { Engine } from '../lib/engine';
-import type { ActionType } from '../lib/types';
-import { useLog } from '../lib/useLog';
+import { ACTION_LABELS } from '../../lib/describe';
+import { Engine } from '../../lib/engine';
+import type { ActionType } from '../../lib/types';
+import { useLog } from '../../lib/useLog';
 
 export default function Log() {
   const { colors, spacing } = useTheme();
-  const router = useRouter();
   const toast = useToast();
   const [log, reload] = useLog();
 
@@ -32,18 +30,26 @@ export default function Log() {
     ]);
 
   return (
-    <Screen>
-      <Header title="Activity" subtitle={`${log.length} run${log.length === 1 ? '' : 's'}`} onBack={() => router.back()} />
+    <Screen aurora bottomSpace={TAB_BAR_SPACE}>
+      <Hero overline="Autopilot" title="Activity" subtitle="Every run, what triggered it, and what each action did." />
+      {log.length > 0 ? (
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <StatTile label="Runs logged" value={String(log.length)} />
+          <StatTile label="With a failure" value={String(log.filter((e) => e.results.some((r) => r.error)).length)} />
+          <StatTile label="Skipped" value={String(log.filter((e) => e.skipped).length)} />
+        </View>
+      ) : null}
       {log.length === 0 ? (
         <EmptyState icon={History} title="Nothing has run yet" message="Each time a rule fires, you will see what triggered it and what every action did." />
       ) : (
         <>
-          {log.map((entry) => {
+          {log.map((entry, i) => {
             const failed = entry.results.filter((r) => r.error);
             const Icon = entry.skipped ? CircleMinus : failed.length ? CircleAlert : CircleCheck;
             const tone = entry.skipped ? colors.textMuted : failed.length ? colors.danger : colors.success;
             return (
-              <Card key={`${entry.at}-${entry.ruleId}`} style={{ gap: spacing.sm }}>
+              <Appear key={`${entry.at}-${entry.ruleId}`} index={i}>
+              <Card style={{ gap: spacing.sm, borderColor: failed.length ? colors.danger : colors.border }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                   <Icon size={18} color={tone} />
                   <Text variant="bodyStrong" style={{ flex: 1 }} numberOfLines={1}>
@@ -64,6 +70,7 @@ export default function Log() {
                   </Text>
                 ))}
               </Card>
+              </Appear>
             );
           })}
           <Button label="Clear activity" icon={Trash2} variant="danger" onPress={clear} />

@@ -43,6 +43,8 @@ object Actions {
     "ringVolume" -> volume(context, AudioManager.STREAM_RING, a.optInt("percent", 50))
     "brightness" -> brightness(context, a.optInt("percent", 50))
     "flashlight" -> flashlight(context, a.optBoolean("on"))
+    "vibrate" -> vibrate(context, a.optString("pattern", "short"))
+    "autoRotate" -> autoRotate(context, a.optBoolean("on"))
     "notify" -> notify(context, a.optString("title", "Autopilot"), a.optString("body", ""), a.optString("openPackage", ""))
     else -> "Unknown action"
   }
@@ -52,6 +54,7 @@ object Actions {
     return nm.isNotificationPolicyAccessGranted
   }
 
+  /** Android treats any change into or out of silent as a Do Not Disturb change. */
   private fun ringer(context: Context, mode: String): String? {
     val audio = context.getSystemService(AudioManager::class.java)
     val target = when (mode) {
@@ -60,8 +63,32 @@ object Actions {
       "normal" -> AudioManager.RINGER_MODE_NORMAL
       else -> return "Unknown ringer mode"
     }
-    if (target == AudioManager.RINGER_MODE_SILENT && !policyAccess(context)) return "Needs Do Not Disturb access"
+    val touchesSilent = target == AudioManager.RINGER_MODE_SILENT || audio.ringerMode == AudioManager.RINGER_MODE_SILENT
+    if (touchesSilent && !policyAccess(context)) return "Needs Do Not Disturb access"
     audio.ringerMode = target
+    return null
+  }
+
+  private fun vibrate(context: Context, pattern: String): String? {
+    val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+      context.getSystemService(android.os.VibratorManager::class.java).defaultVibrator
+    } else {
+      @Suppress("DEPRECATION") context.getSystemService(android.os.Vibrator::class.java)
+    }
+    if (vibrator == null || !vibrator.hasVibrator()) return "This phone cannot vibrate"
+    val timings = when (pattern) {
+      "long" -> longArrayOf(0, 800)
+      "pulse" -> longArrayOf(0, 120, 120, 120, 120, 120)
+      "heartbeat" -> longArrayOf(0, 90, 120, 160, 500, 90, 120, 160)
+      else -> longArrayOf(0, 250)
+    }
+    vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, -1))
+    return null
+  }
+
+  private fun autoRotate(context: Context, on: Boolean): String? {
+    if (!Settings.System.canWrite(context)) return "Needs Modify system settings access"
+    Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, if (on) 1 else 0)
     return null
   }
 
@@ -74,6 +101,9 @@ object Actions {
 
   private fun volume(context: Context, stream: Int, percent: Int): String? {
     val audio = context.getSystemService(AudioManager::class.java)
+    if (stream == AudioManager.STREAM_RING && !policyAccess(context) && (percent == 0 || audio.ringerMode != AudioManager.RINGER_MODE_NORMAL)) {
+      return "Needs Do Not Disturb access"
+    }
     val max = audio.getStreamMaxVolume(stream)
     val min = if (Build.VERSION.SDK_INT >= 28) audio.getStreamMinVolume(stream) else 0
     val level = (min + (max - min) * percent.coerceIn(0, 100) / 100.0).toInt()
@@ -108,9 +138,13 @@ object Actions {
     }
   }
 
-  private fun notify(context: Context, title: String, body: String, openPackage: String): String? {
+  fun notify(context: Context, title: String, body: String, openPackage: String): String? {
     if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return "Notifications are turned off for Autopilot"
     ensureChannel(context)
+    if (Build.VERSION.SDK_INT >= 26) {
+      val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_REMINDERS)
+      if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return "The “Rule reminders” notification category is turned off"
+    }
     val launch = (if (openPackage.isNotEmpty()) context.packageManager.getLaunchIntentForPackage(openPackage) else null)
       ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
     val pending = launch?.let {
@@ -118,7 +152,7 @@ object Actions {
       PendingIntent.getActivity(context, title.hashCode(), it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
     val notification = NotificationCompat.Builder(context, CHANNEL_REMINDERS)
-      .setSmallIcon(context.applicationInfo.icon)
+      .setSmallIcon(R.drawable.ic_autopilot_stat)
       .setContentTitle(title)
       .setContentText(body)
       .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -126,7 +160,7 @@ object Actions {
       .setAutoCancel(true)
       .apply { if (pending != null) setContentIntent(pending) }
       .build()
-    NotificationManagerCompat.from(context).notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+    NotificationManagerCompat.from(context).notify(title.hashCode(), notification)
     return null
   }
 }

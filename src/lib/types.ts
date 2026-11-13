@@ -7,7 +7,8 @@ export type Trigger =
   | { type: 'charging'; state: OnOff }
   | { type: 'battery'; direction: 'below' | 'above'; level: number }
   | { type: 'headphones'; state: OnOff }
-  | { type: 'wifi'; state: OnOff; ssid: string };
+  | { type: 'wifi'; state: OnOff; ssid: string }
+  | { type: 'unlock' };
 
 export type TriggerType = Trigger['type'];
 
@@ -18,7 +19,9 @@ export type Action =
   | { type: 'ringVolume'; percent: number }
   | { type: 'brightness'; percent: number }
   | { type: 'flashlight'; on: boolean }
-  | { type: 'notify'; title: string; body: string };
+  | { type: 'notify'; title: string; body: string }
+  | { type: 'vibrate'; pattern: 'short' | 'long' | 'pulse' | 'heartbeat' }
+  | { type: 'autoRotate'; on: boolean };
 
 export type ActionType = Action['type'];
 

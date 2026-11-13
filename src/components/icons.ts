@@ -1,4 +1,4 @@
-import { BatteryMedium, BellRing, Clock, Flashlight, Headphones, MoonStar, PlugZap, Sun, Volume2, Vibrate, Wifi } from 'lucide-react-native';
+import { BatteryMedium, BellRing, Clock, Flashlight, Headphones, LockOpen, MoonStar, PlugZap, RotateCw, Smartphone, Sun, Volume2, Vibrate, Wifi } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ActionType, TriggerType } from '../lib/types';
 
@@ -9,6 +9,7 @@ export const TRIGGER_ICONS: Record<TriggerType, LucideIcon> = {
   battery: BatteryMedium,
   headphones: Headphones,
   wifi: Wifi,
+  unlock: LockOpen,
 };
 
 export const ACTION_ICONS: Record<ActionType, LucideIcon> = {
@@ -19,4 +20,6 @@ export const ACTION_ICONS: Record<ActionType, LucideIcon> = {
   brightness: Sun,
   flashlight: Flashlight,
   notify: BellRing,
+  vibrate: Smartphone,
+  autoRotate: RotateCw,
 };

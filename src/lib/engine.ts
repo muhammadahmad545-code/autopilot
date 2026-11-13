@@ -13,6 +13,8 @@ export function toNative(rule: Rule): Record<string, unknown> {
 
 /** Push the current rules to the engine. Safe to call often; the engine re-arms itself. */
 export function syncEngine(rules: Rule[] = rulesSetting.get()): string | null {
+  // If the stored rules could not be read, never push an empty list over the engine's own copy.
+  if (rulesSetting.readFailed()) return 'Your saved rules could not be read. The engine keeps running the last rules it had.';
   try {
     Engine.setRules(JSON.stringify(rules.map(toNative)));
     if (Engine.isPaused() !== pausedSetting.get()) Engine.setPaused(pausedSetting.get());
@@ -25,6 +27,15 @@ export function syncEngine(rules: Rule[] = rulesSetting.get()): string | null {
 export function saveRules(rules: Rule[]): string | null {
   rulesSetting.set(rules);
   return syncEngine(rules);
+}
+
+/** Earliest last precomputed prayer timestamp across enabled prayer rules, i.e. when the schedule runs out. */
+export function prayerHorizon(rules: Rule[]): number | null {
+  const ends = rules.filter((r) => r.enabled && r.trigger.type === 'prayer').map((r) => {
+    const times = (toNative(r).trigger as { times?: number[] }).times ?? [];
+    return times[times.length - 1] ?? 0;
+  });
+  return ends.length ? Math.min(...ends) : null;
 }
 
 export function readLog(): LogEntry[] {

@@ -14,22 +14,25 @@ data class Rule(
   val actions: JSONArray
 ) {
   val triggerType: String get() = trigger.optString("type")
+  val isClock: Boolean get() = triggerType == "time" || triggerType == "prayer"
 
   /** Next time this rule should fire by the clock, or null for event-driven triggers. */
   fun nextFireAt(now: Long): Long? = when (triggerType) {
     "time" -> nextTime(trigger, now)
-    "prayer" -> {
-      val times = trigger.optJSONArray("times")
-      var next: Long? = null
-      if (times != null) {
-        for (i in 0 until times.length()) {
-          val t = times.optLong(i)
-          if (t > now) { next = t; break }
-        }
-      }
-      next
-    }
+    "prayer" -> prayerTimes().firstOrNull { it > now }
     else -> null
+  }
+
+  /** The most recent scheduled occurrence in (from, to], used to catch up on late or missed alarms. */
+  fun latestOccurrence(from: Long, to: Long): Long? = when (triggerType) {
+    "time" -> previousTime(trigger, to)?.takeIf { it > from }
+    "prayer" -> prayerTimes().lastOrNull { it in (from + 1)..to }
+    else -> null
+  }
+
+  fun prayerTimes(): List<Long> {
+    val times = trigger.optJSONArray("times") ?: return emptyList()
+    return (0 until times.length()).map { times.optLong(it) }.filter { it > 0 }.sorted()
   }
 
   /** Optional limits that apply to any trigger: weekdays and a time-of-day window. */
@@ -55,25 +58,40 @@ data class Rule(
   companion object {
     fun isoDay(cal: Calendar): Int = ((cal.get(Calendar.DAY_OF_WEEK) + 5) % 7) + 1
 
+    private fun days(trigger: JSONObject): Set<Int> {
+      val json = trigger.optJSONArray("days")
+      return if (json == null || json.length() == 0) (1..7).toSet() else (0 until json.length()).map { json.optInt(it) }.toSet()
+    }
+
+    private fun at(base: Long, dayOffset: Int, hour: Int, minute: Int): Calendar = Calendar.getInstance().apply {
+      timeInMillis = base
+      add(Calendar.DAY_OF_YEAR, dayOffset)
+      set(Calendar.HOUR_OF_DAY, hour)
+      set(Calendar.MINUTE, minute)
+      set(Calendar.SECOND, 0)
+      set(Calendar.MILLISECOND, 0)
+    }
+
     fun nextTime(trigger: JSONObject, now: Long): Long? {
       val hour = trigger.optInt("hour", -1)
       val minute = trigger.optInt("minute", -1)
       if (hour !in 0..23 || minute !in 0..59) return null
-      val daysJson = trigger.optJSONArray("days")
-      val days = if (daysJson == null || daysJson.length() == 0) (1..7).toSet()
-        else (0 until daysJson.length()).map { daysJson.optInt(it) }.toSet()
-      val cal = Calendar.getInstance().apply {
-        timeInMillis = now
-        set(Calendar.HOUR_OF_DAY, hour)
-        set(Calendar.MINUTE, minute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-      }
+      val allowed = days(trigger)
       for (i in 0..7) {
-        if (cal.timeInMillis > now && isoDay(cal) in days) return cal.timeInMillis
-        cal.add(Calendar.DAY_OF_YEAR, 1)
-        cal.set(Calendar.HOUR_OF_DAY, hour)
-        cal.set(Calendar.MINUTE, minute)
+        val cal = at(now, i, hour, minute)
+        if (cal.timeInMillis > now && isoDay(cal) in allowed) return cal.timeInMillis
+      }
+      return null
+    }
+
+    fun previousTime(trigger: JSONObject, now: Long): Long? {
+      val hour = trigger.optInt("hour", -1)
+      val minute = trigger.optInt("minute", -1)
+      if (hour !in 0..23 || minute !in 0..59) return null
+      val allowed = days(trigger)
+      for (i in 0..7) {
+        val cal = at(now, -i, hour, minute)
+        if (cal.timeInMillis <= now && isoDay(cal) in allowed) return cal.timeInMillis
       }
       return null
     }

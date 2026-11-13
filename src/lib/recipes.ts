@@ -77,4 +77,22 @@ export const RECIPES: Recipe[] = [
     blurb: 'Remind you to take your keys and wallet when the phone leaves home Wi-Fi.',
     rule: { name: 'Leaving home', trigger: { type: 'wifi', state: 'disconnected', ssid: '' }, actions: [{ type: 'notify', title: 'Keys, wallet, charger?', body: 'You just left home Wi-Fi.' }] },
   },
+  {
+    id: 'unlock-portrait',
+    title: 'Portrait on unlock',
+    blurb: 'Turn auto-rotate off every time you unlock, so the screen stops flipping in bed.',
+    rule: { name: 'Portrait on unlock', trigger: { type: 'unlock' }, conditions: { window: { start: 21 * 60, end: 8 * 60 } }, actions: [{ type: 'autoRotate', on: false }] },
+  },
+  {
+    id: 'charger-buzz',
+    title: 'Charging confirmation',
+    blurb: 'A short vibration when the charger connects, so you know it is actually charging.',
+    rule: { name: 'Charging confirmation', trigger: { type: 'charging', state: 'connected' }, actions: [{ type: 'vibrate', pattern: 'short' }] },
+  },
+  {
+    id: 'jumma',
+    title: 'Silent for Jumu’ah',
+    blurb: 'Silent at 13:15 on Fridays; pair it with a rule that turns the ringer back on.',
+    rule: { name: 'Silent for Jumu’ah', trigger: { type: 'time', hour: 13, minute: 15, days: [5] }, actions: [{ type: 'ringer', mode: 'silent' }] },
+  },
 ];

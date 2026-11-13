@@ -1,6 +1,6 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
-export type PermissionKey = 'notifications' | 'doNotDisturb' | 'writeSettings' | 'exactAlarms' | 'batteryUnrestricted';
+export type PermissionKey = 'notifications' | 'doNotDisturb' | 'writeSettings' | 'exactAlarms' | 'batteryUnrestricted' | 'locationServices';
 export type PermissionState = Record<PermissionKey, boolean>;
 
 export interface ActionResult {

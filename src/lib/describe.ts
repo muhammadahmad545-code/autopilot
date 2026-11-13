@@ -22,8 +22,9 @@ export const TRIGGER_LABELS: Record<TriggerType, string> = {
   prayer: 'Prayer time',
   charging: 'Charger',
   battery: 'Battery level',
-  headphones: 'Headphones',
+  headphones: 'Audio device',
   wifi: 'Wi-Fi',
+  unlock: 'Phone unlocked',
 };
 
 export const ACTION_LABELS: Record<ActionType, string> = {
@@ -34,6 +35,8 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   brightness: 'Screen brightness',
   flashlight: 'Flashlight',
   notify: 'Show a reminder',
+  vibrate: 'Vibrate',
+  autoRotate: 'Auto-rotate',
 };
 
 export function describeTrigger(t: Trigger): string {
@@ -51,7 +54,9 @@ export function describeTrigger(t: Trigger): string {
     case 'battery':
       return t.direction === 'below' ? `When battery drops below ${t.level}%` : `When battery reaches ${t.level}%`;
     case 'headphones':
-      return t.state === 'connected' ? 'When headphones connect' : 'When headphones disconnect';
+      return t.state === 'connected' ? 'When headphones or a Bluetooth audio device connect' : 'When headphones or a Bluetooth audio device disconnect';
+    case 'unlock':
+      return 'When you unlock the phone';
     case 'wifi': {
       const network = t.ssid.trim() ? `“${t.ssid.trim()}”` : 'any Wi-Fi';
       return t.state === 'connected' ? `When connecting to ${network}` : `When leaving ${network}`;
@@ -75,6 +80,10 @@ export function describeAction(a: Action): string {
       return a.on ? 'Flashlight on' : 'Flashlight off';
     case 'notify':
       return `Remind: ${a.title || 'reminder'}`;
+    case 'vibrate':
+      return `Vibrate (${a.pattern})`;
+    case 'autoRotate':
+      return a.on ? 'Auto-rotate on' : 'Auto-rotate off';
   }
 }
 
@@ -91,18 +100,25 @@ export function summarize(rule: Rule): string {
   return actions ? `${describeTrigger(rule.trigger)} → ${actions}` : describeTrigger(rule.trigger);
 }
 
-export type PermissionNeed = 'notifications' | 'doNotDisturb' | 'writeSettings' | 'exactAlarms' | 'batteryUnrestricted' | 'location';
+export type PermissionNeed = 'notifications' | 'doNotDisturb' | 'writeSettings' | 'exactAlarms' | 'batteryUnrestricted' | 'location' | 'locationServices';
 
 /** Which Android permissions a rule depends on, so the editor can warn before saving. */
 export function requiredPermissions(rule: Pick<Rule, 'trigger' | 'actions'>): PermissionNeed[] {
   const needs = new Set<PermissionNeed>();
   const t = rule.trigger.type;
   if (t === 'time' || t === 'prayer') needs.add('exactAlarms');
-  if (t === 'charging' || t === 'battery' || t === 'headphones' || t === 'wifi') needs.add('batteryUnrestricted');
-  if (rule.trigger.type === 'wifi' && rule.trigger.ssid.trim()) needs.add('location');
+  if (t === 'charging' || t === 'battery' || t === 'headphones' || t === 'wifi' || t === 'unlock') {
+    needs.add('batteryUnrestricted');
+    // Android shows a notice while the watcher runs; without notification permission it is hidden but still works.
+  }
+  if (rule.trigger.type === 'wifi' && rule.trigger.ssid.trim()) {
+    needs.add('location');
+    needs.add('locationServices');
+  }
   for (const a of rule.actions) {
-    if (a.type === 'dnd' || (a.type === 'ringer' && a.mode === 'silent')) needs.add('doNotDisturb');
-    if (a.type === 'brightness') needs.add('writeSettings');
+    // Any ringer change can move the phone into or out of silent, which Android treats as Do Not Disturb.
+    if (a.type === 'dnd' || a.type === 'ringer' || a.type === 'ringVolume') needs.add('doNotDisturb');
+    if (a.type === 'brightness' || a.type === 'autoRotate') needs.add('writeSettings');
     if (a.type === 'notify') needs.add('notifications');
   }
   return [...needs];

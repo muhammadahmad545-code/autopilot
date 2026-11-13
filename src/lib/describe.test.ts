@@ -25,9 +25,11 @@ test('permissions follow from what the rule does', () => {
   assert.deepEqual(requiredPermissions(rule({})).sort(), ['batteryUnrestricted', 'doNotDisturb']);
   assert.deepEqual(
     requiredPermissions(rule({ trigger: { type: 'wifi', state: 'connected', ssid: 'Office' }, actions: [{ type: 'brightness', percent: 5 }] })).sort(),
-    ['batteryUnrestricted', 'location', 'writeSettings'],
+    ['batteryUnrestricted', 'location', 'locationServices', 'writeSettings'],
   );
-  assert.deepEqual(requiredPermissions(rule({ trigger: { type: 'time', hour: 1, minute: 0, days: [] }, actions: [{ type: 'ringer', mode: 'vibrate' }] })), ['exactAlarms']);
+  // Leaving silent mode for "vibrate" is a Do Not Disturb change on Android too.
+  assert.deepEqual(requiredPermissions(rule({ trigger: { type: 'time', hour: 1, minute: 0, days: [] }, actions: [{ type: 'ringer', mode: 'vibrate' }] })).sort(), ['doNotDisturb', 'exactAlarms']);
+  assert.deepEqual(requiredPermissions(rule({ trigger: { type: 'unlock' }, actions: [{ type: 'autoRotate', on: false }, { type: 'vibrate', pattern: 'pulse' }] })).sort(), ['batteryUnrestricted', 'writeSettings']);
 });
 
 test('validation catches empty and inconsistent rules', () => {

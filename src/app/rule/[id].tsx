@@ -1,7 +1,7 @@
 import { Button, Card, Chip, Header, IconButton, ListItem, Pressable, Screen, SectionTitle, SegmentedControl, Text, TextField, Toggle, toMessage, useTheme, useToast } from '@basalt/core';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CircleAlert, FlaskConical, Plus, Trash2, X } from 'lucide-react-native';
+import { CircleAlert, Copy, FlaskConical, Plus, Trash2, X } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { DayPicker } from '../../components/DayPicker';
@@ -22,6 +22,7 @@ const DEFAULT_TRIGGERS: Record<TriggerType, Trigger> = {
   battery: { type: 'battery', direction: 'below', level: 20 },
   headphones: { type: 'headphones', state: 'connected' },
   wifi: { type: 'wifi', state: 'connected', ssid: '' },
+  unlock: { type: 'unlock' },
 };
 
 const DEFAULT_ACTIONS: Record<ActionType, Action> = {
@@ -32,6 +33,8 @@ const DEFAULT_ACTIONS: Record<ActionType, Action> = {
   brightness: { type: 'brightness', percent: 30 },
   flashlight: { type: 'flashlight', on: true },
   notify: { type: 'notify', title: '', body: '' },
+  vibrate: { type: 'vibrate', pattern: 'short' },
+  autoRotate: { type: 'autoRotate', on: false },
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -41,6 +44,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   exactAlarms: 'Alarms & reminders',
   batteryUnrestricted: 'Unrestricted battery use',
   location: 'Location (to read Wi-Fi names)',
+  locationServices: 'Location turned on',
 };
 
 function blankRule(recipeId?: string): Rule {
@@ -95,6 +99,14 @@ export default function RuleEditor() {
     }
   };
 
+  const duplicate = () => {
+    const copy: Rule = { ...structuredClone(draft), id: Crypto.randomUUID(), name: `${draft.name || 'Rule'} (copy)`.slice(0, 60), createdAt: Date.now(), enabled: false };
+    const error = saveRules([...rules, copy]);
+    if (error) return toast(error, 'danger');
+    toast('Copy saved, turned off. Adjust it and turn it on.', 'success');
+    router.replace({ pathname: '/rule/[id]', params: { id: copy.id } });
+  };
+
   const remove = () => {
     Alert.alert('Delete this rule?', draft.name || 'This rule', [
       { text: 'Cancel', style: 'cancel' },
@@ -114,6 +126,7 @@ export default function RuleEditor() {
 
   return (
     <Screen
+      aurora
       footer={
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <Button label="Test now" icon={FlaskConical} variant="secondary" size="lg" onPress={test} style={{ flex: 1 }} />
@@ -125,7 +138,14 @@ export default function RuleEditor() {
         title={existing ? 'Edit rule' : 'New rule'}
         subtitle={describeTrigger(draft.trigger)}
         onBack={() => router.back()}
-        right={existing ? <IconButton icon={Trash2} label="Delete rule" tone="danger" onPress={remove} /> : undefined}
+        right={
+          existing ? (
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <IconButton icon={Copy} label="Duplicate rule" onPress={duplicate} />
+              <IconButton icon={Trash2} label="Delete rule" tone="danger" onPress={remove} />
+            </View>
+          ) : undefined
+        }
       />
 
       <TextField label="Name" value={draft.name} onChangeText={(name) => update({ name })} placeholder="e.g. Quiet at night" maxLength={60} error={errorFor('name')} />
@@ -204,6 +224,18 @@ export default function RuleEditor() {
             />
             <Stepper label="Battery level" value={t.level} min={5} max={100} step={5} format={(v) => `${v}%`} onChange={(level) => setTrigger({ ...t, level })} />
           </>
+        ) : null}
+
+        {t.type === 'unlock' ? (
+          <Text variant="caption" color="textMuted">
+            Runs each time you unlock the phone. Combine it with “Only between certain hours” below to limit it.
+          </Text>
+        ) : null}
+
+        {t.type === 'headphones' ? (
+          <Text variant="caption" color="textMuted">
+            Includes wired and Bluetooth headphones, and other Bluetooth audio such as car stereos and speakers.
+          </Text>
         ) : null}
 
         {t.type === 'wifi' ? (
@@ -312,6 +344,28 @@ export default function RuleEditor() {
           ) : null}
           {action.type === 'mediaVolume' || action.type === 'ringVolume' || action.type === 'brightness' ? (
             <Stepper label={ACTION_LABELS[action.type]} value={action.percent} min={action.type === 'brightness' ? 5 : 0} max={100} step={5} format={(v) => `${v}%`} onChange={(percent) => setAction(index, { ...action, percent })} />
+          ) : null}
+          {action.type === 'vibrate' ? (
+            <SegmentedControl
+              options={[
+                { value: 'short', label: 'Short' },
+                { value: 'long', label: 'Long' },
+                { value: 'pulse', label: 'Pulse' },
+                { value: 'heartbeat', label: 'Heart' },
+              ]}
+              value={action.pattern}
+              onChange={(pattern) => setAction(index, { ...action, pattern })}
+            />
+          ) : null}
+          {action.type === 'autoRotate' ? (
+            <SegmentedControl
+              options={[
+                { value: 'on', label: 'Turn on' },
+                { value: 'off', label: 'Turn off' },
+              ]}
+              value={action.on ? 'on' : 'off'}
+              onChange={(v) => setAction(index, { ...action, on: v === 'on' })}
+            />
           ) : null}
           {action.type === 'notify' ? (
             <>

@@ -17,6 +17,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
@@ -29,32 +30,39 @@ import org.json.JSONObject
 
 /**
  * Foreground service that listens for system changes Android no longer delivers to apps in the
- * background: charger, battery level, headphones and Wi-Fi. It only runs while an enabled rule
- * needs one of these triggers.
+ * background: charger, battery level, unlock, audio devices and Wi-Fi. It only runs while an
+ * enabled rule needs one of these triggers.
  */
 class WatchService : Service() {
   private val handler = Handler(Looper.getMainLooper())
   private var lastBattery = -1
   private var headphonesConnected = false
-  private var wifiSsid: String? = null
-  private var wifiConnected = false
   private var audioCallback: AudioDeviceCallback? = null
   private var networkCallback: ConnectivityManager.NetworkCallback? = null
+  private var receiversRegistered = false
 
-  private val powerReceiver = object : BroadcastReceiver() {
+  // Wi-Fi state: the network we consider "connected", its name, and a pending debounced disconnect.
+  private var wifiNetwork: Network? = null
+  private var wifiSsid: String? = null
+  private var wifiAnnounced = false
+  private var pendingDisconnect: Runnable? = null
+  private var pendingConnect: Runnable? = null
+
+  private val systemReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
       when (intent.action) {
         Intent.ACTION_POWER_CONNECTED -> emit(JSONObject().put("type", "charging").put("state", "connected").put("description", "Charger connected"))
         Intent.ACTION_POWER_DISCONNECTED -> emit(JSONObject().put("type", "charging").put("state", "disconnected").put("description", "Charger disconnected"))
+        Intent.ACTION_USER_PRESENT -> emit(JSONObject().put("type", "unlock").put("description", "Phone unlocked"))
         Intent.ACTION_BATTERY_CHANGED -> {
           val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
           val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
           if (level < 0 || scale <= 0) return
           val percent = level * 100 / scale
-          if (lastBattery >= 0 && percent != lastBattery) {
-            emit(JSONObject().put("type", "battery").put("level", percent).put("previous", lastBattery).put("description", "Battery at $percent%"))
+          if (percent != lastBattery) {
+            lastBattery = percent
+            emit(JSONObject().put("type", "battery").put("level", percent).put("description", "Battery at $percent%"))
           }
-          lastBattery = percent
         }
       }
     }
@@ -64,26 +72,40 @@ class WatchService : Service() {
 
   override fun onCreate() {
     super.onCreate()
-    goForeground()
+    if (!goForeground()) {
+      stopSelf()
+      return
+    }
     val filter = IntentFilter().apply {
       addAction(Intent.ACTION_POWER_CONNECTED)
       addAction(Intent.ACTION_POWER_DISCONNECTED)
       addAction(Intent.ACTION_BATTERY_CHANGED)
+      addAction(Intent.ACTION_USER_PRESENT)
     }
-    ContextCompat.registerReceiver(this, powerReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
-    watchHeadphones()
-    watchWifi()
+    ContextCompat.registerReceiver(this, systemReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    receiversRegistered = true
+    runCatching { watchHeadphones() }
+    runCatching { watchWifi() }
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    goForeground()
+    // startForeground must always run first, even when we are about to stop, or Android crashes the app.
+    if (!goForeground()) {
+      stopSelf()
+      return START_NOT_STICKY
+    }
+    if (intent?.action == ACTION_STOP) {
+      stopSelf()
+      return START_NOT_STICKY
+    }
     return START_STICKY
   }
 
   override fun onDestroy() {
-    runCatching { unregisterReceiver(powerReceiver) }
+    if (receiversRegistered) runCatching { unregisterReceiver(systemReceiver) }
     audioCallback?.let { cb -> runCatching { getSystemService(AudioManager::class.java).unregisterAudioDeviceCallback(cb) } }
     networkCallback?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(cb) } }
+    handler.removeCallbacksAndMessages(null)
     super.onDestroy()
   }
 
@@ -95,9 +117,9 @@ class WatchService : Service() {
     }
   }
 
-  // ---- headphones ---------------------------------------------------------------------------------
+  // ---- audio devices ----------------------------------------------------------------------------
 
-  private fun isHeadphone(device: AudioDeviceInfo): Boolean {
+  private fun isPersonalAudio(device: AudioDeviceInfo): Boolean {
     val types = mutableSetOf(
       AudioDeviceInfo.TYPE_WIRED_HEADSET,
       AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
@@ -110,58 +132,105 @@ class WatchService : Service() {
 
   private fun watchHeadphones() {
     val audio = getSystemService(AudioManager::class.java)
-    headphonesConnected = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any(::isHeadphone)
+    headphonesConnected = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any(::isPersonalAudio)
     val callback = object : AudioDeviceCallback() {
       override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) = check()
       override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) = check()
       private fun check() {
-        val now = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any(::isHeadphone)
+        val devices = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).filter(::isPersonalAudio)
+        val now = devices.isNotEmpty()
         if (now == headphonesConnected) return
         headphonesConnected = now
+        val name = devices.firstOrNull()?.productName?.toString()?.takeIf { it.isNotBlank() }
         emit(JSONObject().put("type", "headphones").put("state", if (now) "connected" else "disconnected")
-          .put("description", if (now) "Headphones connected" else "Headphones disconnected"))
+          .put("description", if (now) "Audio device connected${name?.let { ": $it" } ?: ""}" else "Audio device disconnected"))
       }
     }
     audio.registerAudioDeviceCallback(callback, handler)
     audioCallback = callback
   }
 
-  // ---- Wi-Fi ----------------------------------------------------------------------------------------
+  // ---- Wi-Fi ------------------------------------------------------------------------------------
 
   @Suppress("DEPRECATION")
-  private fun currentSsid(): String? {
-    val info = getSystemService(WifiManager::class.java)?.connectionInfo ?: return null
-    val ssid = info.ssid?.trim('"') ?: return null
-    return if (ssid.isEmpty() || ssid == "<unknown ssid>") null else ssid
+  private fun legacySsid(): String? = clean(getSystemService(WifiManager::class.java)?.connectionInfo?.ssid)
+
+  private fun clean(raw: String?): String? {
+    val ssid = raw?.trim('"') ?: return null
+    return if (ssid.isEmpty() || ssid == WifiManager.UNKNOWN_SSID || ssid == "<unknown ssid>") null else ssid
+  }
+
+  private fun announceConnected() {
+    if (wifiAnnounced) return
+    wifiAnnounced = true
+    val ssid = wifiSsid
+    emit(JSONObject().put("type", "wifi").put("state", "connected").put("ssid", ssid ?: "")
+      .put("description", if (ssid != null) "Connected to $ssid" else "Connected to Wi-Fi"))
   }
 
   private fun watchWifi() {
     val connectivity = getSystemService(ConnectivityManager::class.java)
-    val active = connectivity.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
-    wifiConnected = active?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-    wifiSsid = if (wifiConnected) currentSsid() else null
+    // Seed the current state so starting the service does not fire "connected".
+    connectivity.activeNetwork?.let { active ->
+      val caps = connectivity.getNetworkCapabilities(active)
+      if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+        wifiNetwork = active
+        wifiSsid = (if (Build.VERSION.SDK_INT >= 31) clean((caps.transportInfo as? WifiInfo)?.ssid) else null) ?: legacySsid()
+        wifiAnnounced = true
+      }
+    }
 
-    val callback = object : ConnectivityManager.NetworkCallback() {
-      override fun onAvailable(network: Network) {
-        // Give the system a moment so the SSID is readable.
-        handler.postDelayed({
-          val ssid = currentSsid()
-          if (wifiConnected && ssid == wifiSsid) return@postDelayed
-          wifiConnected = true
-          wifiSsid = ssid
-          emit(JSONObject().put("type", "wifi").put("state", "connected").put("ssid", ssid ?: "")
-            .put("description", if (ssid != null) "Connected to $ssid" else "Connected to Wi-Fi"))
-        }, 1500)
+    val callback = object : ConnectivityManager.NetworkCallback(if (Build.VERSION.SDK_INT >= 31) FLAG_INCLUDE_LOCATION_INFO else 0) {
+      override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+        handler.post {
+          val ssid = (if (Build.VERSION.SDK_INT >= 31) clean((caps.transportInfo as? WifiInfo)?.ssid) else null) ?: legacySsid()
+          val reconnectSame = pendingDisconnect != null && (ssid == null || ssid == wifiSsid)
+          pendingDisconnect?.let { handler.removeCallbacks(it) }
+          pendingDisconnect = null
+          if (reconnectSame && wifiAnnounced) {
+            // A brief drop and back on the same network: not a real disconnect.
+            wifiNetwork = network
+            return@post
+          }
+          if (wifiNetwork != network || !wifiAnnounced) {
+            if (wifiAnnounced && wifiNetwork != null && ssid != null && ssid != wifiSsid) {
+              emit(JSONObject().put("type", "wifi").put("state", "disconnected").put("ssid", wifiSsid ?: "").put("description", "Left ${wifiSsid ?: "Wi-Fi"}"))
+            }
+            if (wifiNetwork != network) wifiAnnounced = false
+            wifiNetwork = network
+            if (ssid != null) wifiSsid = ssid
+            // Wait briefly for the name to become readable, then announce once.
+            pendingConnect?.let { handler.removeCallbacks(it) }
+            val run = Runnable { announceConnected() }
+            pendingConnect = run
+            handler.postDelayed(run, if (ssid != null) 0 else 2000)
+          } else if (ssid != null) {
+            wifiSsid = ssid
+          }
+        }
       }
 
       override fun onLost(network: Network) {
         handler.post {
-          if (!wifiConnected) return@post
+          if (network != wifiNetwork) return@post
+          pendingConnect?.let { handler.removeCallbacks(it) }
+          pendingConnect = null
+          if (!wifiAnnounced) {
+            wifiNetwork = null
+            return@post
+          }
+          // Debounce: weak signal and power saving cause short drops that are not "leaving".
           val previous = wifiSsid
-          wifiConnected = false
-          wifiSsid = null
-          emit(JSONObject().put("type", "wifi").put("state", "disconnected").put("ssid", previous ?: "")
-            .put("description", if (previous != null) "Left $previous" else "Wi-Fi disconnected"))
+          val run = Runnable {
+            pendingDisconnect = null
+            wifiNetwork = null
+            wifiAnnounced = false
+            wifiSsid = null
+            emit(JSONObject().put("type", "wifi").put("state", "disconnected").put("ssid", previous ?: "")
+              .put("description", if (previous != null) "Left $previous" else "Wi-Fi disconnected"))
+          }
+          pendingDisconnect = run
+          handler.postDelayed(run, DISCONNECT_DEBOUNCE_MS)
         }
       }
     }
@@ -169,44 +238,61 @@ class WatchService : Service() {
     networkCallback = callback
   }
 
-  // ---- foreground notification ---------------------------------------------------------------------
+  // ---- foreground notification -------------------------------------------------------------------
 
-  private fun goForeground() {
-    val nm = getSystemService(NotificationManager::class.java)
-    if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
-      nm.createNotificationChannel(NotificationChannel(CHANNEL, "Watching triggers", NotificationManager.IMPORTANCE_MIN).apply {
-        description = "Shown while Autopilot listens for charger, battery, headphone and Wi-Fi changes"
-        setShowBadge(false)
-      })
+  /** Returns false when Android refuses the foreground start (e.g. a background restart on Android 12+). */
+  private fun goForeground(): Boolean {
+    return try {
+      val nm = getSystemService(NotificationManager::class.java)
+      if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Watching triggers", NotificationManager.IMPORTANCE_MIN).apply {
+          description = "Shown while Autopilot listens for charger, battery, unlock, audio and Wi-Fi changes"
+          setShowBadge(false)
+        })
+      }
+      val launch = packageManager.getLaunchIntentForPackage(packageName)?.let {
+        PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+      }
+      val count = Engine.rules(this).count { it.enabled && it.triggerType in EVENT_TYPES }
+      val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
+        .setSmallIcon(R.drawable.ic_autopilot_stat)
+        .setContentTitle("Autopilot is on")
+        .setContentText("Watching $count rule${if (count == 1) "" else "s"}")
+        .setOngoing(true)
+        .setSilent(true)
+        .setPriority(NotificationCompat.PRIORITY_MIN)
+        .apply { if (launch != null) setContentIntent(launch) }
+        .build()
+      if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+      else startForeground(NOTIFICATION_ID, notification)
+      true
+    } catch (e: Exception) {
+      false
     }
-    val launch = packageManager.getLaunchIntentForPackage(packageName)?.let {
-      PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
-    }
-    val count = Engine.rules(this).count { it.enabled && it.triggerType in EVENT_TYPES }
-    val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
-      .setSmallIcon(applicationInfo.icon)
-      .setContentTitle("Autopilot is on")
-      .setContentText("Watching $count rule${if (count == 1) "" else "s"}")
-      .setOngoing(true)
-      .setSilent(true)
-      .setPriority(NotificationCompat.PRIORITY_MIN)
-      .apply { if (launch != null) setContentIntent(launch) }
-      .build()
-    if (Build.VERSION.SDK_INT >= 34) startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-    else startForeground(NOTIFICATION_ID, notification)
   }
 
   companion object {
-    val EVENT_TYPES = setOf("charging", "battery", "headphones", "wifi")
+    val EVENT_TYPES = setOf("charging", "battery", "headphones", "wifi", "unlock")
     private const val CHANNEL = "autopilot_watch"
     private const val NOTIFICATION_ID = 4202
+    private const val ACTION_STOP = "expo.modules.autopilotengine.STOP"
+    private const val DISCONNECT_DEBOUNCE_MS = 45_000L
 
     fun start(context: Context) {
-      ContextCompat.startForegroundService(context, Intent(context, WatchService::class.java))
+      try {
+        ContextCompat.startForegroundService(context, Intent(context, WatchService::class.java))
+      } catch (e: Exception) {
+        // Android 12+ refuses background starts in some states; the next app open or boot retries.
+      }
     }
 
+    /** Stop through the service itself, so startForeground always runs before it ends. */
     fun stop(context: Context) {
-      context.stopService(Intent(context, WatchService::class.java))
+      try {
+        context.startService(Intent(context, WatchService::class.java).setAction(ACTION_STOP))
+      } catch (e: Exception) {
+        context.stopService(Intent(context, WatchService::class.java))
+      }
     }
   }
 }

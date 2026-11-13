@@ -1,23 +1,23 @@
-import { Card, Header, Screen, Text, useTheme } from '@basalt/core';
+import { Appear, Card, Hero, Screen, TAB_BAR_SPACE, Text, useTheme } from '@basalt/core';
 import { useRouter } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import React from 'react';
 import { View } from 'react-native';
-import { TRIGGER_ICONS } from '../components/icons';
-import { summarize } from '../lib/describe';
-import { RECIPES } from '../lib/recipes';
+import { TRIGGER_ICONS } from '../../components/icons';
+import { summarize } from '../../lib/describe';
+import { RECIPES } from '../../lib/recipes';
 
 export default function Recipes() {
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
   return (
-    <Screen>
-      <Header title="Recipes" subtitle="Ready-made rules you can adjust" onBack={() => router.back()} />
-      {RECIPES.map((recipe) => {
+    <Screen aurora bottomSpace={TAB_BAR_SPACE}>
+      <Hero overline="Autopilot" title="Recipes" subtitle="Ready-made rules. Tap one, adjust it, save." />
+      {RECIPES.map((recipe, i) => {
         const Icon = TRIGGER_ICONS[recipe.rule.trigger.type];
         return (
+          <Appear key={recipe.id} index={i}>
           <Card
-            key={recipe.id}
             onPress={() => router.push({ pathname: '/rule/[id]', params: { id: 'new', recipe: recipe.id } })}
             accessibilityLabel={`${recipe.title}. ${recipe.blurb}`}
             style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'center' }}
@@ -36,6 +36,7 @@ export default function Recipes() {
             </View>
             <ChevronRight size={18} color={colors.textFaint} />
           </Card>
+          </Appear>
         );
       })}
     </Screen>

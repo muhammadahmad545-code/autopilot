@@ -4,38 +4,58 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Process-wide rule engine. Everything it needs lives in SharedPreferences, so it works when
- * the React Native side is not running (alarms, boot, the watch service).
+ * Process-wide rule engine. Everything it needs lives in device-protected SharedPreferences, so it
+ * works when the React Native side is not running and right after a reboot, before first unlock.
  */
 object Engine {
   private const val PREFS = "autopilot_engine"
   private const val KEY_RULES = "rules"
   private const val KEY_LOG = "log"
   private const val KEY_PAUSED = "paused"
+  private const val KEY_LAST_CHECK = "lastCheckedAt"
   private const val LOG_LIMIT = 300
   private const val ALARM_REQUEST = 4201
+
+  /** How late a missed state-setting rule may still run (phone off, deep doze). Older ones are logged as missed. */
+  private const val CATCH_UP_MS = 2 * 60 * 60 * 1000L
+  /** Battery rules re-arm only after the level moves this far back across the threshold. */
+  private const val BATTERY_HYSTERESIS = 3
+  private const val PRAYER_WARN_MS = 14 * 24 * 60 * 60 * 1000L
 
   /** Set by the module while JavaScript is alive so the UI updates live. */
   @Volatile var listener: ((Map<String, Any?>) -> Unit)? = null
 
-  private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+  private fun prefs(context: Context): SharedPreferences {
+    val storage = if (Build.VERSION.SDK_INT >= 24) context.createDeviceProtectedStorageContext() else context
+    val prefs = storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    // One-time move from the old credential-protected location, so v1.0 rules survive the update.
+    if (Build.VERSION.SDK_INT >= 24 && !prefs.getBoolean("migrated", false)) {
+      runCatching { storage.moveSharedPreferencesFrom(context, PREFS) }
+      storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("migrated", true).apply()
+      return storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
+    return prefs
+  }
 
   fun rules(context: Context): List<Rule> = Rule.parseAll(prefs(context).getString(KEY_RULES, "[]") ?: "[]")
 
   fun isPaused(context: Context): Boolean = prefs(context).getBoolean(KEY_PAUSED, false)
 
   fun setRules(context: Context, json: String) {
-    prefs(context).edit().putString(KEY_RULES, json).apply()
+    val prefs = prefs(context)
+    if (!prefs.contains(KEY_LAST_CHECK)) prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
+    prefs.edit().putString(KEY_RULES, json).apply()
     refresh(context)
   }
 
   fun setPaused(context: Context, paused: Boolean) {
-    prefs(context).edit().putBoolean(KEY_PAUSED, paused).apply()
+    prefs(context).edit().putBoolean(KEY_PAUSED, paused).putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
     refresh(context)
   }
 
@@ -62,61 +82,125 @@ object Engine {
     if (isPaused(context)) return
     val now = System.currentTimeMillis()
     val next = rules(context).filter { it.enabled }.mapNotNull { it.nextFireAt(now) }.minOrNull() ?: return
-    val exact = Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()
-    if (exact) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending)
+    if (exactAlarmsAllowed(context)) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending)
     else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending)
   }
 
   fun exactAlarmsAllowed(context: Context): Boolean =
     Build.VERSION.SDK_INT < 31 || context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
-  /** Called by the alarm: run every clock rule that is due within the last few minutes. */
+  /**
+   * Runs every clock rule whose latest occurrence fell since the last check. Alarms can arrive late
+   * (doze) or not at all (phone off), so this catches up instead of only looking at "now".
+   */
+  @Synchronized
   fun onAlarm(context: Context) {
     val now = System.currentTimeMillis()
     val prefs = prefs(context)
+    val lastCheck = prefs.getLong(KEY_LAST_CHECK, now - 60_000)
     if (!isPaused(context)) {
       for (rule in rules(context)) {
-        if (!rule.enabled || rule.triggerType !in setOf("time", "prayer")) continue
-        // The due time is the next fire time as seen from slightly in the past.
-        val due = rule.nextFireAt(now - GRACE_MS) ?: continue
-        if (due > now + EARLY_MS) continue
+        if (!rule.enabled || !rule.isClock) continue
+        val due = rule.latestOccurrence(lastCheck, now + EARLY_MS) ?: continue
         val lastKey = "last:${rule.id}"
         if (prefs.getLong(lastKey, 0) >= due) continue
         prefs.edit().putLong(lastKey, due).apply()
-        fire(context, rule, describeClock(rule))
+        val late = now - due
+        when {
+          late > CATCH_UP_MS -> log(context, rule, describeClock(rule), emptyList(), skipped = "Missed: the phone was off or asleep at ${clockText(due)}")
+          late > 90_000 -> fire(context, rule, "${describeClock(rule)} (ran ${late / 60_000} min late)")
+          else -> fire(context, rule, describeClock(rule))
+        }
       }
     }
+    prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
+    warnIfPrayerTimesRunningOut(context, now)
     scheduleNextAlarm(context)
   }
 
+  private fun clockText(at: Long) = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(at))
+
   private fun describeClock(rule: Rule): String =
-    if (rule.triggerType == "prayer") "Prayer time: ${rule.trigger.optString("prayer")}"
+    if (rule.triggerType == "prayer") "Prayer time: ${rule.trigger.optString("prayer").replaceFirstChar { it.uppercase() }}"
     else "Scheduled time %02d:%02d".format(rule.trigger.optInt("hour"), rule.trigger.optInt("minute"))
+
+  /** After a clock correction, forget "already ran" marks that lie in the future. */
+  fun onClockChanged(context: Context) {
+    val prefs = prefs(context)
+    val now = System.currentTimeMillis()
+    val editor = prefs.edit()
+    prefs.all.forEach { (key, value) -> if (key.startsWith("last:") && value is Long && value > now) editor.remove(key) }
+    if (prefs.getLong(KEY_LAST_CHECK, 0) > now) editor.putLong(KEY_LAST_CHECK, now)
+    editor.apply()
+  }
+
+  /** Prayer times are precomputed by the app; remind the user to open it before they run out. */
+  private fun warnIfPrayerTimesRunningOut(context: Context, now: Long) {
+    val prayerRules = rules(context).filter { it.enabled && it.triggerType == "prayer" }
+    if (prayerRules.isEmpty()) return
+    val lastTime = prayerRules.mapNotNull { it.prayerTimes().lastOrNull() }.minOrNull() ?: return
+    if (lastTime - now > PRAYER_WARN_MS) return
+    val prefs = prefs(context)
+    if (now - prefs.getLong("prayerWarnedAt", 0) < 24 * 60 * 60 * 1000L) return
+    prefs.edit().putLong("prayerWarnedAt", now).apply()
+    Actions.notify(context, "Open Autopilot to refresh prayer times", "Prayer rules have times for only a few more days. Opening the app recalculates the next four months.", "")
+  }
 
   // ---- event triggers ---------------------------------------------------------------------------
 
   /** Called by the watch service. `event` carries `type` plus the trigger-specific fields. */
+  @Synchronized
   fun onEvent(context: Context, event: JSONObject) {
     if (isPaused(context)) return
-    val now = System.currentTimeMillis()
     for (rule in rules(context)) {
       if (!rule.enabled || rule.triggerType != event.optString("type")) continue
+      if (rule.triggerType == "battery") {
+        if (batteryShouldFire(context, rule, event.optInt("level", -1))) fire(context, rule, event.optString("description"))
+        continue
+      }
+      if (rule.triggerType == "wifi" && rule.trigger.optString("ssid").isNotBlank() && event.optString("ssid").isEmpty()) {
+        log(context, rule, event.optString("description"), emptyList(), skipped = "Couldn’t read the Wi-Fi name. Check that Location is on and Autopilot may use it all the time.")
+        continue
+      }
       if (!matches(rule.trigger, event)) continue
       fire(context, rule, event.optString("description"))
     }
   }
 
+  /**
+   * Fires once per crossing, then waits until the level moves [BATTERY_HYSTERESIS] points back.
+   * Stops "Unplug at 80%" from firing on every 79↔80 bounce while the charger holds the level.
+   */
+  private fun batteryShouldFire(context: Context, rule: Rule, level: Int): Boolean {
+    if (level < 0) return false
+    val prefs = prefs(context)
+    val key = "armed:${rule.id}"
+    val threshold = rule.trigger.optInt("level", 20)
+    val above = rule.trigger.optString("direction", "below") == "above"
+    val crossed = if (above) level >= threshold else level < threshold
+    val rearm = if (above) level <= threshold - BATTERY_HYSTERESIS else level >= threshold + BATTERY_HYSTERESIS
+    if (!prefs.contains(key)) {
+      // First reading for this rule: armed only if we start on the far side of the threshold.
+      prefs.edit().putBoolean(key, !crossed).apply()
+      return false
+    }
+    val armed = prefs.getBoolean(key, true)
+    return when {
+      armed && crossed -> {
+        prefs.edit().putBoolean(key, false).apply()
+        true
+      }
+      !armed && rearm -> {
+        prefs.edit().putBoolean(key, true).apply()
+        false
+      }
+      else -> false
+    }
+  }
+
   fun matches(trigger: JSONObject, event: JSONObject): Boolean = when (trigger.optString("type")) {
     "charging", "headphones" -> trigger.optString("state") == event.optString("state")
-    "battery" -> {
-      val threshold = trigger.optInt("level", 20)
-      val previous = event.optInt("previous", -1)
-      val level = event.optInt("level", -1)
-      when (trigger.optString("direction", "below")) {
-        "above" -> previous in 0 until threshold && level >= threshold
-        else -> previous >= threshold && level in 0 until threshold
-      }
-    }
+    "unlock" -> true
     "wifi" -> {
       val wanted = trigger.optString("ssid", "").trim()
       trigger.optString("state") == event.optString("state") &&
@@ -129,7 +213,7 @@ object Engine {
 
   fun fire(context: Context, rule: Rule, cause: String) {
     if (!rule.conditionsMet(System.currentTimeMillis())) {
-      log(context, rule, cause, emptyList(), skipped = "Outside this rule's days or hours")
+      log(context, rule, cause, emptyList(), skipped = "Outside this rule’s days or hours")
       return
     }
     log(context, rule, cause, Actions.runAll(context, rule.actions), skipped = null)
@@ -168,6 +252,5 @@ object Engine {
     prefs(context).edit().putString(KEY_LOG, "[]").apply()
   }
 
-  private const val GRACE_MS = 5 * 60 * 1000L
   private const val EARLY_MS = 30 * 1000L
 }

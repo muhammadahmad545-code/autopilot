@@ -67,7 +67,8 @@ class AutopilotEngineModule : Module() {
         "doNotDisturb" to nm.isNotificationPolicyAccessGranted,
         "writeSettings" to Settings.System.canWrite(context),
         "exactAlarms" to Engine.exactAlarmsAllowed(context),
-        "batteryUnrestricted" to power.isIgnoringBatteryOptimizations(context.packageName)
+        "batteryUnrestricted" to power.isIgnoringBatteryOptimizations(context.packageName),
+        "locationServices" to (Build.VERSION.SDK_INT < 28 || context.getSystemService(android.location.LocationManager::class.java).isLocationEnabled)
       )
     }
 
@@ -84,6 +85,7 @@ class AutopilotEngineModule : Module() {
           if (Build.VERSION.SDK_INT >= 31) Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg) else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
         )
         "batteryUnrestricted" -> openSettings(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg))
+        "locationServices" -> openSettings(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
         else -> openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg))
       }
     }

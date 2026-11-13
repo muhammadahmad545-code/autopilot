@@ -1,13 +1,16 @@
-import { Button, Card, Chip, Header, ListItem, Screen, SectionTitle, SegmentedControl, Text, TextField, UpdateCard, themePreference, useTheme, useToast, useUpdater } from '@basalt/core';
+import { Button, Card, Chip, Hero, ListItem, Screen, SectionTitle, SegmentedControl, TAB_BAR_SPACE, Text, TextField, UpdateCard, themePreference, toMessage, useTheme, useToast, useUpdater } from '@basalt/core';
+import * as Clipboard from 'expo-clipboard';
+import * as Crypto from 'expo-crypto';
 import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
-import { Code, KeyRound, MapPin, RefreshCw, ShieldCheck } from 'lucide-react-native';
+import { ClipboardPaste, Code, KeyRound, MapPin, RefreshCw, Share2, ShieldCheck, Sparkles } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { View } from 'react-native';
-import { syncEngine } from '../lib/engine';
-import { CITIES, METHODS, PRAYERS, PRAYER_LABELS, prayerTimes } from '../lib/prayer';
-import type { CalcMethod } from '../lib/prayer';
-import { REPO_URL, UPDATE_SOURCE, locationSetting, methodSetting, schoolSetting } from '../lib/settings';
+import { Share, View } from 'react-native';
+import { prayerHorizon, saveRules, syncEngine } from '../../lib/engine';
+import { exportRules, importRules } from '../../lib/transfer';
+import { CITIES, METHODS, PRAYERS, PRAYER_LABELS, prayerTimes } from '../../lib/prayer';
+import type { CalcMethod } from '../../lib/prayer';
+import { REPO_URL, UPDATE_SOURCE, locationSetting, methodSetting, onboardedSetting, rulesSetting, schoolSetting } from '../../lib/settings';
 
 const THEMES = [
   { value: 'system', label: 'System' },
@@ -35,7 +38,33 @@ export default function Settings() {
     if (error) toast(error, 'danger');
   };
 
+  const [rules] = rulesSetting.use();
+  const horizon = prayerHorizon(rules);
+
+  const exportAll = async () => {
+    if (rules.length === 0) return toast('There are no rules to export.');
+    try {
+      await Share.share({ message: exportRules(rules), title: 'Autopilot rules' });
+    } catch (error) {
+      toast(toMessage(error), 'danger');
+    }
+  };
+
+  const importFromClipboard = async () => {
+    try {
+      const text = await Clipboard.getStringAsync();
+      const { rules: incoming, skipped } = importRules(text, () => Crypto.randomUUID());
+      if (incoming.length === 0) return toast('No usable rules were found in the copied text.', 'danger');
+      const error = saveRules([...rules, ...incoming]);
+      if (error) return toast(error, 'danger');
+      toast(`Imported ${incoming.length} rule${incoming.length === 1 ? '' : 's'}, turned off for you to review${skipped ? ` (${skipped} skipped)` : ''}.`, 'success');
+    } catch (error) {
+      toast(toMessage(error), 'danger');
+    }
+  };
+
   const saveCoordinates = () => {
+    if (!lat.trim() || !lng.trim()) return toast('Enter both latitude and longitude.', 'danger');
     const la = Number(lat);
     const ln = Number(lng);
     if (!Number.isFinite(la) || !Number.isFinite(ln) || Math.abs(la) > 90 || Math.abs(ln) > 180) {
@@ -46,8 +75,8 @@ export default function Settings() {
   };
 
   return (
-    <Screen>
-      <Header title="Settings" onBack={() => router.back()} />
+    <Screen aurora bottomSpace={TAB_BAR_SPACE}>
+      <Hero overline="Autopilot" title="Settings" />
 
       <SectionTitle title="Prayer times" />
       <Card style={{ gap: spacing.md }}>
@@ -97,6 +126,11 @@ export default function Settings() {
           value={school}
           onChange={(s) => apply(() => setSchool(s))}
         />
+        {horizon ? (
+          <Text variant="caption" color="textFaint">
+            Prayer rules are scheduled until {new Date(horizon).toLocaleDateString()}. Opening Autopilot extends this by four months.
+          </Text>
+        ) : null}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {PRAYERS.map((p) => (
             <View key={p} style={{ minWidth: '30%', gap: 2 }}>
@@ -106,6 +140,17 @@ export default function Settings() {
               <Text variant="bodyStrong">{today[p] ? today[p]!.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</Text>
             </View>
           ))}
+        </View>
+      </Card>
+
+      <SectionTitle title="Backup and share" />
+      <Card style={{ gap: spacing.sm }}>
+        <Text variant="caption" color="textMuted">
+          Export sends your rules as text you can save or send to another phone. To import, copy that text and tap Import. Imported rules start turned off so you can review them.
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Button label="Export rules" icon={Share2} variant="secondary" onPress={() => void exportAll()} style={{ flex: 1 }} />
+          <Button label="Import" icon={ClipboardPaste} variant="secondary" onPress={() => void importFromClipboard()} style={{ flex: 1 }} />
         </View>
       </Card>
 
@@ -127,6 +172,7 @@ export default function Settings() {
       <Card style={{ paddingVertical: spacing.xs }}>
         <ListItem title="Permissions" subtitle="See what each rule needs" icon={KeyRound} chevron onPress={() => router.push('/permissions')} />
         <ListItem title="Private by design" subtitle="Rules, logs and your location never leave the phone. The only network request is the update check." icon={ShieldCheck} iconTone="success" />
+        <ListItem title="Show the introduction again" icon={Sparkles} chevron onPress={() => onboardedSetting.set(false)} />
         <ListItem title="Source code" subtitle="MIT licensed on GitHub" icon={Code} chevron onPress={() => void Linking.openURL(REPO_URL)} />
       </Card>
     </Screen>

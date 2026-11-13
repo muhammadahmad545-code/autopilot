@@ -13,7 +13,8 @@ const ITEMS: { key: PermissionKey | 'location'; title: string; why: string }[] =
   { key: 'batteryUnrestricted', title: 'Unrestricted battery', why: 'Stops Android from freezing Autopilot in the background, which would silently break charger, battery, headphone and Wi-Fi rules.' },
   { key: 'doNotDisturb', title: 'Do Not Disturb access', why: 'Needed to switch Do Not Disturb or set the phone fully silent.' },
   { key: 'writeSettings', title: 'Modify system settings', why: 'Needed only for brightness actions.' },
-  { key: 'location', title: 'Location', why: 'Only for Wi-Fi rules that match a network by name. Autopilot never records where you are.' },
+  { key: 'location', title: 'Location permission', why: 'Only for Wi-Fi rules that match a network by name. Choose “Allow all the time” so it works in the background. Autopilot never records where you are.' },
+  { key: 'locationServices', title: 'Location turned on', why: 'Android hides Wi-Fi names while the phone’s Location setting is off.' },
 ];
 
 export default function Permissions() {
@@ -27,9 +28,11 @@ export default function Permissions() {
       if (key === 'location') {
         const ok = await requestLocation();
         if (!ok) toast('If Android stops asking, allow Location in App info.', 'danger');
-      } else if (key === 'notifications' && !(await requestNotifications())) {
-        Engine.openPermission('notifications');
-      } else if (key !== 'notifications') {
+      } else if (key === 'notifications') {
+        await requestNotifications();
+        // Below Android 13 there is no prompt, and a refused prompt cannot be shown again: open settings.
+        if (!Engine.getPermissions().notifications) Engine.openPermission('notifications');
+      } else {
         Engine.openPermission(key);
       }
     } finally {
@@ -38,7 +41,7 @@ export default function Permissions() {
   };
 
   return (
-    <Screen>
+    <Screen aurora>
       <Header title="Permissions" subtitle="Grant only what your rules use" onBack={() => router.back()} />
       <Card style={{ gap: spacing.sm }}>
         <Text variant="bodyStrong">Installed from outside the Play Store?</Text>
