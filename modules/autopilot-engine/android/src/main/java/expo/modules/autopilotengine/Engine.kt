@@ -31,26 +31,47 @@ object Engine {
   /** Set by the module while JavaScript is alive so the UI updates live. */
   @Volatile var listener: ((Map<String, Any?>) -> Unit)? = null
 
+  @Volatile private var cached: SharedPreferences? = null
+
+  /** Opened once per process; the one-time move from credential storage runs under a lock. */
   private fun prefs(context: Context): SharedPreferences {
-    val storage = if (Build.VERSION.SDK_INT >= 24) context.createDeviceProtectedStorageContext() else context
-    val prefs = storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    // One-time move from the old credential-protected location, so v1.0 rules survive the update.
-    if (Build.VERSION.SDK_INT >= 24 && !prefs.getBoolean("migrated", false)) {
-      runCatching { storage.moveSharedPreferencesFrom(context, PREFS) }
-      storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("migrated", true).apply()
-      return storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    cached?.let { return it }
+    synchronized(this) {
+      cached?.let { return it }
+      val storage = if (Build.VERSION.SDK_INT >= 24) context.applicationContext.createDeviceProtectedStorageContext() else context.applicationContext
+      if (Build.VERSION.SDK_INT >= 24) {
+        val probe = storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!probe.getBoolean("migrated", false)) {
+          // Moves v1.0 rules from credential-protected storage. Must happen before anyone writes here.
+          runCatching { storage.moveSharedPreferencesFrom(context.applicationContext, PREFS) }
+        }
+      }
+      val prefs = storage.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+      if (!prefs.getBoolean("migrated", false)) prefs.edit().putBoolean("migrated", true).commit()
+      cached = prefs
+      return prefs
     }
-    return prefs
   }
 
   fun rules(context: Context): List<Rule> = Rule.parseAll(prefs(context).getString(KEY_RULES, "[]") ?: "[]")
 
   fun isPaused(context: Context): Boolean = prefs(context).getBoolean(KEY_PAUSED, false)
 
+  @Synchronized
   fun setRules(context: Context, json: String) {
     val prefs = prefs(context)
-    if (!prefs.contains(KEY_LAST_CHECK)) prefs.edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
-    prefs.edit().putString(KEY_RULES, json).apply()
+    val now = System.currentTimeMillis()
+    // Compare what the user set, not the precomputed prayer timestamps that change on every sync.
+    fun shape(rule: Rule) = JSONObject(rule.trigger.toString()).apply { remove("times") }.toString()
+    val before = rules(context).filter { it.enabled }.associate { it.id to shape(it) }
+    val editor = prefs.edit()
+    if (!prefs.contains(KEY_LAST_CHECK)) editor.putLong(KEY_LAST_CHECK, now)
+    // A rule that is new, just turned on, or given a different time starts counting from now, so a
+    // 09:00 rule created at 09:30 does not immediately "catch up" on a time from before it existed.
+    for (rule in Rule.parseAll(json)) {
+      if (rule.enabled && rule.isClock && before[rule.id] != shape(rule)) editor.putLong("last:${rule.id}", now)
+    }
+    editor.putString(KEY_RULES, json).apply()
     refresh(context)
   }
 

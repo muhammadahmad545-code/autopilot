@@ -184,7 +184,8 @@ class WatchService : Service() {
       override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
         handler.post {
           val ssid = (if (Build.VERSION.SDK_INT >= 31) clean((caps.transportInfo as? WifiInfo)?.ssid) else null) ?: legacySsid()
-          val reconnectSame = pendingDisconnect != null && (ssid == null || ssid == wifiSsid)
+          // Only the same network object, or the same readable name, counts as coming back.
+          val reconnectSame = pendingDisconnect != null && (network == wifiNetwork || (ssid != null && ssid == wifiSsid))
           pendingDisconnect?.let { handler.removeCallbacks(it) }
           pendingDisconnect = null
           if (reconnectSame && wifiAnnounced) {

@@ -4,6 +4,15 @@
 
 **[Download the latest APK](https://github.com/muhammadahmad545-code/autopilot/releases/latest)**
 
+## What's new in 1.1
+
+- **Redesigned** with tab navigation (Rules, Activity, Recipes, Settings), a status ring, today's prayer times with a countdown, and when each rule last ran.
+- **No more silent misses.** Late alarms (doze) run late instead of never; rules missed while the phone was off are logged as missed; rules and alarms are restored before the first unlock after a reboot (direct boot).
+- **Battery rules fire once per crossing**, then wait for the level to move 3% back before re-arming.
+- **Wi-Fi rules** read the network name from the connection itself and ignore brief drops (45-second debounce).
+- **New:** “phone unlocked” trigger, vibrate and auto-rotate actions, three new recipes, duplicate a rule, export and import rules as text.
+- **Correct permissions:** ringer and ring-volume changes now ask for Do Not Disturb access, as Android requires; location-services status is checked for Wi-Fi names.
+
 ## What it does
 
 | Triggers | Actions |
