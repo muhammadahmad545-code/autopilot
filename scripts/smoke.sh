@@ -63,7 +63,5 @@ try:
 except Exception as e:
     print("no dump", e)
 PY
-echo "---- diag ----"
-grep "\[diag\]" "$OUT/logcat.txt" | cut -c1-700 | head -60
 echo "---- JS errors ----"
 head -80 "$OUT/errors.txt"

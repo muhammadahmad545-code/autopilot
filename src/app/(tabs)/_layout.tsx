@@ -11,9 +11,5 @@ const ITEMS = [
 ];
 
 export default function TabsLayout() {
-  console.log('[diag] TabsLayout render');
-  return <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => {
-        console.log('[diag] tabBar', JSON.stringify({ index: props.state.index, routes: props.state.routes.map((r) => r.name) }));
-        return <FloatingTabBar {...props} items={ITEMS} />;
-      }} />;
+  return <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <FloatingTabBar {...props} items={ITEMS} />} />;
 }
