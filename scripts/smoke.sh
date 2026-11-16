@@ -1,8 +1,8 @@
 #!/bin/bash
 # Smoke test on an emulator: install, launch, skip the introduction, capture what is on screen.
-# Usage: smoke.sh <apk> <package>
+# Usage: smoke.sh <apk> <package> <text that must be on screen after the introduction>
 set -u
-APK="$1"; PKG="$2"; OUT=smoke
+APK="$1"; PKG="$2"; EXPECT="$3"; OUT=smoke
 mkdir -p "$OUT"
 adb wait-for-device
 adb shell settings put global window_animation_scale 0
@@ -45,12 +45,17 @@ adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
 wait_for "Skip" || echo "introduction never appeared"
 shot 1-launch
 tap_text "Skip" || echo "no Skip found"
-sleep 45
+wait_for "$EXPECT" || echo "EXPECTED TEXT NOT FOUND AFTER INTRO: $EXPECT"
+sleep 5
 shot 2-after-intro
+# Visit every tab by its label to prove each screen renders.
+for label in ${TABS:-}; do
+  tap_text "$label" && sleep 8 && shot "tab-$label"
+done
 # Relaunch from cold to see the second-start path.
 adb shell am force-stop "$PKG"; sleep 2
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 60
+wait_for "$EXPECT" || echo "EXPECTED TEXT NOT FOUND AFTER RELAUNCH: $EXPECT"
 shot 3-relaunch
 adb logcat -d -v time > "$OUT/logcat.txt"
 grep -E "ReactNativeJS|AndroidRuntime|FATAL|Error|Exception" "$OUT/logcat.txt" | grep -v "chatty" | tail -200 > "$OUT/errors.txt" || true
@@ -65,3 +70,7 @@ except Exception as e:
 PY
 echo "---- JS errors ----"
 head -80 "$OUT/errors.txt"
+
+# Fail the build when the app did not render its first screen.
+grep -q "text=\"$EXPECT\"" "$OUT/2-after-intro.xml" && grep -q "text=\"$EXPECT\"" "$OUT/3-relaunch.xml" || { echo "SMOKE TEST FAILED: '$EXPECT' not on screen"; exit 1; }
+echo "SMOKE TEST PASSED"

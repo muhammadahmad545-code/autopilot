@@ -133,7 +133,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash scripts/smoke.sh "$(ls dist/*.apk | head -1)" dev.basalt.autopilot
+          script: TABS="Activity Recipes Settings" bash scripts/smoke.sh "$(ls dist/*.apk | head -1)" dev.basalt.autopilot Rules
       - uses: actions/upload-artifact@v4
         if: always()
         with:
