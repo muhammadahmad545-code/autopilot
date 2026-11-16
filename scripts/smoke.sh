@@ -31,16 +31,26 @@ PY
   [ -n "$xy" ] && adb shell input tap $xy && echo "tapped '$1' at $xy"
 }
 
+# Wait until the app shows something we can read (slow emulators can take a minute).
+wait_for() {
+  for i in $(seq 1 30); do
+    adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 && adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1
+    grep -q "text=\"$1\"" /tmp/ui.xml 2>/dev/null && return 0
+    sleep 5
+  done
+  return 1
+}
+
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 30
+wait_for "Skip" || echo "introduction never appeared"
 shot 1-launch
-tap_text "Skip" || tap_text "Skip introduction" || echo "no Skip found"
-sleep 20
+tap_text "Skip" || echo "no Skip found"
+sleep 45
 shot 2-after-intro
 # Relaunch from cold to see the second-start path.
 adb shell am force-stop "$PKG"; sleep 2
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null
-sleep 30
+sleep 60
 shot 3-relaunch
 adb logcat -d -v time > "$OUT/logcat.txt"
 grep -E "ReactNativeJS|AndroidRuntime|FATAL|Error|Exception" "$OUT/logcat.txt" | grep -v "chatty" | tail -200 > "$OUT/errors.txt" || true
