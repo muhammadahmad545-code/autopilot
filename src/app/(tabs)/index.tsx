@@ -13,6 +13,7 @@ import { countdown, useNow } from '../../lib/useNow';
 import { usePermissions } from '../../lib/usePermissions';
 
 export default function Rules() {
+  console.log('[diag] Rules screen render');
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
   const toast = useToast();

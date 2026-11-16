@@ -1,5 +1,6 @@
 import { ErrorBoundary, Onboarding, ThemeProvider, ToastProvider, useBasaltFonts, useTheme } from '@basalt/core';
 import { Stack } from 'expo-router/stack';
+import { usePathname, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { History, MoonStar, Sparkles, Workflow } from 'lucide-react-native';
@@ -21,6 +22,9 @@ const PAGES = [
 function Navigator() {
   const { colors, scheme } = useTheme();
   const [onboarded, setOnboarded] = onboardedSetting.use();
+  const pathname = usePathname();
+  const segments = useSegments();
+  console.log('[diag] Navigator render', JSON.stringify({ onboarded, pathname, segments }));
   if (!onboarded) return <Onboarding appName="Autopilot" pages={PAGES} onDone={() => setOnboarded(true)} />;
   return (
     <>
@@ -30,8 +34,18 @@ function Navigator() {
   );
 }
 
+const g = globalThis as unknown as { ErrorUtils?: { getGlobalHandler: () => (e: Error, f?: boolean) => void; setGlobalHandler: (h: (e: Error, f?: boolean) => void) => void } };
+if (g.ErrorUtils) {
+  const prev = g.ErrorUtils.getGlobalHandler();
+  g.ErrorUtils.setGlobalHandler((e, fatal) => {
+    console.log('[diag] global error', fatal, e?.message, e?.stack?.slice(0, 600));
+    prev(e, fatal);
+  });
+}
+
 export default function RootLayout() {
   const fontsReady = useBasaltFonts();
+  console.log('[diag] RootLayout render fontsReady=' + fontsReady);
 
   useEffect(() => {
     // Refresh the 120-day prayer schedule and re-arm alarms every time the app opens.
@@ -45,7 +59,7 @@ export default function RootLayout() {
   if (!fontsReady) return null;
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary onError={(e) => console.log('[diag] boundary', e.message, e.stack?.slice(0, 600))}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <ThemeProvider accent={ACCENT}>
