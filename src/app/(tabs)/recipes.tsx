@@ -1,6 +1,6 @@
 import { Appear, Card, Hero, Screen, TAB_BAR_SPACE, Text, useTheme } from '@basalt/core';
 import { useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
+import ChevronRight from 'lucide-react-native/icons/chevron-right';
 import React from 'react';
 import { View } from 'react-native';
 import { TRIGGER_ICONS } from '../../components/icons';

@@ -1,6 +1,7 @@
 import { Button, Card, Header, Screen, Text, useTheme, useToast } from '@basalt/core';
 import { useRouter } from 'expo-router';
-import { CircleAlert, CircleCheck } from 'lucide-react-native';
+import CircleAlert from 'lucide-react-native/icons/circle-exclamation-point';
+import CircleCheck from 'lucide-react-native/icons/circle-check';
 import React from 'react';
 import { View } from 'react-native';
 import type { PermissionKey } from '../../modules/autopilot-engine';

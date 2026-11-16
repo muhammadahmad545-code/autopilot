@@ -2,7 +2,10 @@ import { ErrorBoundary, Onboarding, ThemeProvider, ToastProvider, useBasaltFonts
 import { Stack } from 'expo-router/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { History, MoonStar, Sparkles, Workflow } from 'lucide-react-native';
+import History from 'lucide-react-native/icons/rotate-ccw-clock';
+import MoonStar from 'lucide-react-native/icons/moon-star';
+import Sparkles from 'lucide-react-native/icons/sparkles';
+import Workflow from 'lucide-react-native/icons/workflow';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';

@@ -1,7 +1,12 @@
 import { Button, Card, Chip, Header, IconButton, ListItem, Pressable, Screen, SectionTitle, SegmentedControl, Text, TextField, Toggle, toMessage, useTheme, useToast } from '@basalt/core';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { CircleAlert, Copy, FlaskConical, Plus, Trash2, X } from 'lucide-react-native';
+import CircleAlert from 'lucide-react-native/icons/circle-exclamation-point';
+import Copy from 'lucide-react-native/icons/copy';
+import FlaskConical from 'lucide-react-native/icons/flask-conical';
+import Plus from 'lucide-react-native/icons/plus';
+import Trash2 from 'lucide-react-native/icons/trash';
+import X from 'lucide-react-native/icons/x';
 import React, { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { DayPicker } from '../../components/DayPicker';

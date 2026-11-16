@@ -1,4 +1,17 @@
-import { BatteryMedium, BellRing, Clock, Flashlight, Headphones, LockOpen, MoonStar, PlugZap, RotateCw, Smartphone, Sun, Volume2, Vibrate, Wifi } from 'lucide-react-native';
+import BatteryMedium from 'lucide-react-native/icons/battery-medium';
+import BellRing from 'lucide-react-native/icons/bell-ring';
+import Clock from 'lucide-react-native/icons/clock';
+import Flashlight from 'lucide-react-native/icons/flashlight';
+import Headphones from 'lucide-react-native/icons/headphones';
+import LockOpen from 'lucide-react-native/icons/lock-open';
+import MoonStar from 'lucide-react-native/icons/moon-star';
+import PlugZap from 'lucide-react-native/icons/plug-zap';
+import RotateCw from 'lucide-react-native/icons/rotate-cw';
+import Smartphone from 'lucide-react-native/icons/smartphone';
+import Sun from 'lucide-react-native/icons/sun';
+import Volume2 from 'lucide-react-native/icons/volume-2';
+import Vibrate from 'lucide-react-native/icons/vibrate';
+import Wifi from 'lucide-react-native/icons/wifi';
 import type { LucideIcon } from 'lucide-react-native';
 import type { ActionType, TriggerType } from '../lib/types';
 

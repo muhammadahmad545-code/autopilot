@@ -1,5 +1,9 @@
 import { Appear, Button, Card, EmptyState, Hero, Screen, StatTile, TAB_BAR_SPACE, Text, formatRelativeTime, useTheme, useToast } from '@basalt/core';
-import { CircleAlert, CircleCheck, CircleMinus, History, Trash2 } from 'lucide-react-native';
+import CircleAlert from 'lucide-react-native/icons/circle-exclamation-point';
+import CircleCheck from 'lucide-react-native/icons/circle-check';
+import CircleMinus from 'lucide-react-native/icons/circle-minus';
+import History from 'lucide-react-native/icons/rotate-ccw-clock';
+import Trash2 from 'lucide-react-native/icons/trash';
 import React from 'react';
 import { Alert, View } from 'react-native';
 import { ACTION_LABELS } from '../../lib/describe';

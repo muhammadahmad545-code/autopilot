@@ -1,6 +1,12 @@
 import { Appear, Button, Card, EmptyState, Hero, IconButton, Ring, Screen, SectionTitle, TAB_BAR_SPACE, Text, Toggle, UpdateCard, formatRelativeTime, useTheme, useToast, useUpdater } from '@basalt/core';
 import { useRouter } from 'expo-router';
-import { CircleAlert, KeyRound, Pause, Play, Plus, Sparkles, Workflow } from 'lucide-react-native';
+import CircleAlert from 'lucide-react-native/icons/circle-exclamation-point';
+import KeyRound from 'lucide-react-native/icons/key-round';
+import Pause from 'lucide-react-native/icons/pause';
+import Play from 'lucide-react-native/icons/play';
+import Plus from 'lucide-react-native/icons/plus';
+import Sparkles from 'lucide-react-native/icons/sparkles';
+import Workflow from 'lucide-react-native/icons/workflow';
 import React, { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
 import { TRIGGER_ICONS } from '../../components/icons';
