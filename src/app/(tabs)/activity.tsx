@@ -38,8 +38,8 @@ export default function Log() {
       <Hero overline="Autopilot" title="Activity" subtitle="Every run, what triggered it, and what each action did." />
       {log.length > 0 ? (
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <StatTile label="Runs logged" value={String(log.length)} />
-          <StatTile label="With a failure" value={String(log.filter((e) => e.results.some((r) => r.error)).length)} />
+          <StatTile label="Runs" value={String(log.length)} />
+          <StatTile label="Failed" value={String(log.filter((e) => e.results.some((r) => r.error)).length)} />
           <StatTile label="Skipped" value={String(log.filter((e) => e.skipped).length)} />
         </View>
       ) : null}

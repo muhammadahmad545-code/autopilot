@@ -6,6 +6,12 @@
 
 Pick the file ending in **`-arm64-v8a.apk`**: that is the right one for almost every phone from the last several years. `-armeabi-v7a.apk` is for older 32-bit phones and `-x86_64.apk` for emulators and Chromebooks. Installed apps update themselves to the matching file.
 
+## What's new in 1.2
+
+- **Calmer, cleaner design:** plain surfaces, a docked tab bar, clear type and no distracting motion.
+- **Pause for a while:** pause every rule for 1 hour, 3 hours or until 7:00 tomorrow; it resumes by itself.
+- **Tested end to end on every build:** an Android emulator runs the app like a user before any release.
+
 ## What's new in 1.1
 
 - **Redesigned** with tab navigation (Rules, Activity, Recipes, Settings), a status ring, today's prayer times with a countdown, and when each rule last ran.
