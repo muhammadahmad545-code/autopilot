@@ -16,6 +16,8 @@ declare class AutopilotEngineModule extends NativeModule<Events> {
   setRules(json: string): void;
   setPaused(paused: boolean): void;
   isPaused(): boolean;
+  pauseUntil(until: number): void;
+  pausedUntil(): number;
   getLog(): string;
   clearLog(): void;
   runNow(ruleJson: string): ActionResult[];

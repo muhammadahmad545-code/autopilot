@@ -12,4 +12,4 @@ export const onboardedSetting = createSetting<boolean>('autopilot.onboarded', fa
 
 export const UPDATE_SOURCE = { owner: 'muhammadahmad545-code', repo: 'autopilot' } as const;
 export const REPO_URL = `https://github.com/${UPDATE_SOURCE.owner}/${UPDATE_SOURCE.repo}`;
-export const ACCENT = { dark: '#8B9CFF', dark2: '#C084FC', light: '#4352D6', light2: '#7E22CE', onAccent: '#0A0D24' } as const;
+export const ACCENT = { dark: '#818CF8', dark2: '#6366F1', light: '#4F46E5', light2: '#4338CA', onAccent: '#0F1033' } as const;

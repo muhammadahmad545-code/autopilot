@@ -18,6 +18,7 @@ object Engine {
   private const val KEY_RULES = "rules"
   private const val KEY_LOG = "log"
   private const val KEY_PAUSED = "paused"
+  private const val KEY_PAUSED_UNTIL = "pausedUntil"
   private const val KEY_LAST_CHECK = "lastCheckedAt"
   private const val LOG_LIMIT = 300
   private const val ALARM_REQUEST = 4201
@@ -55,7 +56,19 @@ object Engine {
 
   fun rules(context: Context): List<Rule> = Rule.parseAll(prefs(context).getString(KEY_RULES, "[]") ?: "[]")
 
-  fun isPaused(context: Context): Boolean = prefs(context).getBoolean(KEY_PAUSED, false)
+  /** Paused indefinitely, or for a while (until a time that has not passed yet). */
+  fun isPaused(context: Context): Boolean {
+    val prefs = prefs(context)
+    return prefs.getBoolean(KEY_PAUSED, false) || prefs.getLong(KEY_PAUSED_UNTIL, 0) > System.currentTimeMillis()
+  }
+
+  fun pausedUntil(context: Context): Long = prefs(context).getLong(KEY_PAUSED_UNTIL, 0).takeIf { it > System.currentTimeMillis() } ?: 0
+
+  /** Pause every rule until `until`; an alarm at that time resumes everything by itself. */
+  fun pauseUntil(context: Context, until: Long) {
+    prefs(context).edit().putBoolean(KEY_PAUSED, false).putLong(KEY_PAUSED_UNTIL, until).putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
+    refresh(context)
+  }
 
   @Synchronized
   fun setRules(context: Context, json: String) {
@@ -76,7 +89,7 @@ object Engine {
   }
 
   fun setPaused(context: Context, paused: Boolean) {
-    prefs(context).edit().putBoolean(KEY_PAUSED, paused).putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
+    prefs(context).edit().putBoolean(KEY_PAUSED, paused).putLong(KEY_PAUSED_UNTIL, 0).putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply()
     refresh(context)
   }
 
@@ -100,9 +113,11 @@ object Engine {
     val alarms = context.getSystemService(AlarmManager::class.java)
     val pending = alarmIntent(context)
     alarms.cancel(pending)
-    if (isPaused(context)) return
     val now = System.currentTimeMillis()
-    val next = rules(context).filter { it.enabled }.mapNotNull { it.nextFireAt(now) }.minOrNull() ?: return
+    val resumeAt = pausedUntil(context)
+    if (prefs(context).getBoolean(KEY_PAUSED, false)) return
+    // While paused for a while, the only alarm is the one that ends the pause.
+    val next = if (resumeAt > 0) resumeAt else rules(context).filter { it.enabled }.mapNotNull { it.nextFireAt(now) }.minOrNull() ?: return
     if (exactAlarmsAllowed(context)) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending)
     else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pending)
   }
@@ -119,6 +134,13 @@ object Engine {
     val now = System.currentTimeMillis()
     val prefs = prefs(context)
     val lastCheck = prefs.getLong(KEY_LAST_CHECK, now - 60_000)
+    val endedPause = prefs.getLong(KEY_PAUSED_UNTIL, 0).let { it in 1..now }
+    if (endedPause) {
+      // The timed pause is over: resume from now, without catching up on what was skipped.
+      prefs.edit().putLong(KEY_PAUSED_UNTIL, 0).putLong(KEY_LAST_CHECK, now).apply()
+      refresh(context)
+      return
+    }
     if (!isPaused(context)) {
       for (rule in rules(context)) {
         if (!rule.enabled || !rule.isClock) continue

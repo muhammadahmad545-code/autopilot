@@ -1,4 +1,4 @@
-import { Appear, Button, Card, EmptyState, Hero, IconButton, Ring, Screen, SectionTitle, TAB_BAR_SPACE, Text, Toggle, UpdateCard, formatRelativeTime, useTheme, useToast, useUpdater } from '@basalt/core';
+import { Appear, Button, Card, Chip, EmptyState, Hero, IconButton, Ring, Screen, SectionTitle, TAB_BAR_SPACE, Text, Toggle, UpdateCard, formatRelativeTime, useTheme, useToast, useUpdater } from '@basalt/core';
 import { useRouter } from 'expo-router';
 import CircleAlert from 'lucide-react-native/icons/circle-exclamation-point';
 import KeyRound from 'lucide-react-native/icons/key-round';
@@ -7,13 +7,14 @@ import Play from 'lucide-react-native/icons/play';
 import Plus from 'lucide-react-native/icons/plus';
 import Sparkles from 'lucide-react-native/icons/sparkles';
 import Workflow from 'lucide-react-native/icons/workflow';
-import React, { useMemo } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { TRIGGER_ICONS } from '../../components/icons';
 import { describeConditions, requiredPermissions, summarize } from '../../lib/describe';
-import { Engine, saveRules } from '../../lib/engine';
+import { Engine, readPause, saveRules } from '../../lib/engine';
 import { PRAYERS, PRAYER_LABELS, prayerTimes } from '../../lib/prayer';
-import { UPDATE_SOURCE, locationSetting, methodSetting, pausedSetting, rulesSetting, schoolSetting } from '../../lib/settings';
+import { UPDATE_SOURCE, locationSetting, methodSetting, rulesSetting, schoolSetting } from '../../lib/settings';
 import { useLog } from '../../lib/useLog';
 import { countdown, useNow } from '../../lib/useNow';
 import { usePermissions } from '../../lib/usePermissions';
@@ -25,7 +26,10 @@ export default function Rules() {
   const now = useNow();
   const updater = useUpdater({ source: UPDATE_SOURCE });
   const [rules] = rulesSetting.use();
-  const [paused, setPaused] = pausedSetting.use();
+  const [pause, setPause] = useState(readPause);
+  const [pauseMenu, setPauseMenu] = useState(false);
+  const paused = pause.paused;
+  useFocusEffect(useCallback(() => setPause(readPause()), []));
   const [location] = locationSetting.use();
   const [method] = methodSetting.use();
   const [school] = schoolSetting.use();
@@ -69,14 +73,30 @@ export default function Rules() {
     if (error) toast(error, 'danger');
   };
 
-  const togglePause = () => {
+  const apply = (fn: () => void, message: string) => {
     try {
-      Engine.setPaused(!paused);
-      setPaused(!paused);
-      toast(paused ? 'Autopilot resumed' : 'All rules paused', 'success');
+      fn();
+      setPause(readPause());
+      toast(message, 'success');
     } catch {
       toast('Could not change the engine state.', 'danger');
     }
+  };
+
+  const togglePause = () => {
+    if (paused) return apply(() => Engine.setPaused(false), 'Autopilot resumed');
+    setPauseMenu((open) => !open);
+  };
+
+  const pauseFor = (until: number | null, message: string) => {
+    setPauseMenu(false);
+    apply(() => (until ? Engine.pauseUntil(until) : Engine.setPaused(true)), message);
+  };
+  const tomorrowSeven = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(7, 0, 0, 0);
+    return d.getTime();
   };
 
   return (
@@ -95,7 +115,7 @@ export default function Rules() {
           <View style={{ flex: 1, gap: spacing.xs }}>
             <Text variant="heading">{paused ? 'Paused' : active ? 'Running on this phone' : 'No active rules'}</Text>
             <Text variant="caption" color="textMuted">
-              {paused ? 'Nothing runs until you resume.' : nextRun ? `Next scheduled run ${countdown(nextRun - now)}` : 'Event rules wait for their trigger.'}
+              {paused ? (pause.until ? `Resumes by itself ${countdown(pause.until - now)}` : 'Nothing runs until you resume.') : nextRun ? `Next scheduled run ${countdown(nextRun - now)}` : 'Event rules wait for their trigger.'}
             </Text>
             <Text variant="caption" color="accent">
               {ranToday} run{ranToday === 1 ? '' : 's'} today
@@ -103,6 +123,21 @@ export default function Rules() {
           </View>
         </Card>
       </Appear>
+
+      {pauseMenu ? (
+        <Card style={{ gap: spacing.sm }}>
+          <Text variant="heading">Pause all rules</Text>
+          <Text variant="caption" color="textMuted">
+            Nothing runs while paused. Timed pauses end by themselves.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            <Chip label="For 1 hour" onPress={() => pauseFor(Date.now() + 3_600_000, 'Paused for 1 hour')} />
+            <Chip label="For 3 hours" onPress={() => pauseFor(Date.now() + 3 * 3_600_000, 'Paused for 3 hours')} />
+            <Chip label="Until 7:00 tomorrow" onPress={() => pauseFor(tomorrowSeven(), 'Paused until 7:00 tomorrow')} />
+            <Chip label="Until I resume" onPress={() => pauseFor(null, 'All rules paused')} />
+          </View>
+        </Card>
+      ) : null}
 
       <Appear index={1}>
         <Card onPress={() => router.push('/settings')} style={{ gap: spacing.sm }}>

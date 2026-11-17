@@ -1,7 +1,7 @@
 import Engine from '../../modules/autopilot-engine';
 import type { PermissionState } from '../../modules/autopilot-engine';
 import { upcomingPrayerTimes } from './prayer';
-import { locationSetting, methodSetting, pausedSetting, rulesSetting, schoolSetting } from './settings';
+import { locationSetting, methodSetting, rulesSetting, schoolSetting } from './settings';
 import type { LogEntry, Rule } from './types';
 
 /** Rule as the native engine wants it: prayer triggers carry precomputed timestamps. */
@@ -17,7 +17,6 @@ export function syncEngine(rules: Rule[] = rulesSetting.get()): string | null {
   if (rulesSetting.readFailed()) return 'Your saved rules could not be read. The engine keeps running the last rules it had.';
   try {
     Engine.setRules(JSON.stringify(rules.map(toNative)));
-    if (Engine.isPaused() !== pausedSetting.get()) Engine.setPaused(pausedSetting.get());
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : 'The automation engine could not be updated.';
@@ -56,3 +55,18 @@ export function readPermissions(): PermissionState | null {
 }
 
 export { Engine };
+
+export interface PauseState {
+  paused: boolean;
+  /** Epoch ms when a timed pause ends, or 0. */
+  until: number;
+}
+
+/** The engine is the source of truth for pausing; it also ends timed pauses by itself. */
+export function readPause(): PauseState {
+  try {
+    return { paused: Engine.isPaused(), until: Engine.pausedUntil() };
+  } catch {
+    return { paused: false, until: 0 };
+  }
+}

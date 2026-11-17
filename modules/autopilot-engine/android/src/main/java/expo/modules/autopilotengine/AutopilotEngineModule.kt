@@ -45,6 +45,11 @@ class AutopilotEngineModule : Module() {
 
     Function("isPaused") { Engine.isPaused(context) }
 
+    Function("pauseUntil") { until: Double -> Engine.pauseUntil(context, until.toLong()) }
+
+    /** When a timed pause ends (epoch ms), or 0 when not paused for a while. */
+    Function("pausedUntil") { Engine.pausedUntil(context).toDouble() }
+
     Function("getLog") { Engine.readLog(context) }
 
     Function("clearLog") { Engine.clearLog(context) }
@@ -55,7 +60,8 @@ class AutopilotEngineModule : Module() {
 
     Function("nextAlarm") {
       val now = System.currentTimeMillis()
-      Engine.rules(context).filter { it.enabled }.mapNotNull { it.nextFireAt(now) }.minOrNull()?.toDouble()
+      if (Engine.isPaused(context)) null
+      else Engine.rules(context).filter { it.enabled }.mapNotNull { it.nextFireAt(now) }.minOrNull()?.toDouble()
     }
 
     /** What the rules need from Android, so the app can show what is missing. */
