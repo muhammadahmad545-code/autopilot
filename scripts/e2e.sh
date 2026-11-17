@@ -3,24 +3,27 @@
 
 adb shell dumpsys battery unplug >/dev/null 2>&1
 tap_text "Recipes"; sleep 4
-expect "Charging confirmation" 15 "recipes list shows"
+expect "Charging confirmation" 6 "recipes list shows"
 tap_text "Charging confirmation"; sleep 4
 expect "Test now" 15 "rule editor opens from a recipe"
 tap_text "Save"; sleep 4
 tap_text "Rules"; sleep 4
-expect "Charging confirmation" 15 "saved rule appears on the Rules tab"
+expect "Charging confirmation" 10 "saved rule appears on the Rules tab"
+scroll_top
 shot e2e-rule-saved
 
 # Plugging in the charger must fire the rule through the background watcher.
 adb shell dumpsys battery set ac 1; sleep 10
 tap_text "Activity"; sleep 4
-expect "Charger connected" 20 "charger rule ran and was logged"
+expect "Charger connected" 15 "charger rule ran and was logged"
+scroll_top
 shot e2e-activity
 
 adb shell dumpsys battery reset >/dev/null 2>&1
 
 # Timed pause and resume.
 tap_text "Rules"; sleep 3
+scroll_top
 tap_text "Pause all rules"; sleep 2
 expect "For 1 hour" 10 "pause menu opens"
 tap_text "For 1 hour"; sleep 3
