@@ -9,7 +9,7 @@ import Workflow from 'lucide-react-native/icons/workflow';
 import React, { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { syncEngine } from '../lib/engine';
+import { Engine, syncEngine } from '../lib/engine';
 import { ACCENT, onboardedSetting } from '../lib/settings';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -39,6 +39,11 @@ export default function RootLayout() {
   useEffect(() => {
     // Refresh the 120-day prayer schedule and re-arm alarms every time the app opens.
     syncEngine();
+    try {
+      Engine.installShortcuts();
+    } catch {
+      // Launcher shortcuts are a nice-to-have.
+    }
   }, []);
 
   useEffect(() => {

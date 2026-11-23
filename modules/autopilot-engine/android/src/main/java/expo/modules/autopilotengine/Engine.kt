@@ -110,6 +110,7 @@ object Engine {
     )
 
   fun scheduleNextAlarm(context: Context) {
+    Status.publish(context)
     val alarms = context.getSystemService(AlarmManager::class.java)
     val pending = alarmIntent(context)
     alarms.cancel(pending)
@@ -244,6 +245,7 @@ object Engine {
   fun matches(trigger: JSONObject, event: JSONObject): Boolean = when (trigger.optString("type")) {
     "charging", "headphones" -> trigger.optString("state") == event.optString("state")
     "unlock" -> true
+    "powerSave" -> trigger.optString("state") == event.optString("state")
     "wifi" -> {
       val wanted = trigger.optString("ssid", "").trim()
       trigger.optString("state") == event.optString("state") &&

@@ -38,3 +38,37 @@ tap_text "Show a reminder"; sleep 2
 tap_text "Save"; sleep 2
 expect "Give the rule a name" 8 "editor rejects an unnamed rule"
 adb shell input keyevent KEYCODE_BACK; sleep 2
+
+# Battery saver trigger: save the recipe, switch battery saver on, check the log.
+adb shell dumpsys battery unplug >/dev/null 2>&1
+tap_text "Recipes"; sleep 4
+scroll_to "Battery saver helper" && tap_text "Battery saver helper"; sleep 4
+expect "Test now" 15 "battery saver recipe opens"
+tap_text "Save"; sleep 4
+adb shell settings put global low_power 1; sleep 10
+tap_text "Activity"; sleep 4
+expect "Battery saver turned on" 15 "battery saver rule ran and was logged"
+shot e2e-power-save
+adb shell settings put global low_power 0
+adb shell dumpsys battery reset >/dev/null 2>&1
+
+# Launcher shortcuts and the home-screen widget are registered.
+adb shell dumpsys shortcut > "$OUT/shortcuts.txt" 2>/dev/null
+grep -A40 "Package: dev.basalt.autopilot" "$OUT/shortcuts.txt" | grep -q "id=new-rule" && pass "launcher shortcuts installed" || fail "launcher shortcuts installed"
+adb shell dumpsys appwidget > "$OUT/appwidget.txt" 2>/dev/null
+grep -q "dev.basalt.autopilot/expo.modules.autopilotengine.StatusWidget" "$OUT/appwidget.txt" && pass "home-screen widget is offered" || fail "home-screen widget is offered"
+
+# Quick Settings tile pauses for an hour, and a second tap resumes.
+TILE=dev.basalt.autopilot/expo.modules.autopilotengine.PauseTileService
+adb shell cmd statusbar add-tile $TILE >/dev/null 2>&1
+adb shell cmd statusbar click-tile $TILE >/dev/null 2>&1; sleep 3
+adb shell cmd statusbar collapse >/dev/null 2>&1
+adb shell monkey -p dev.basalt.autopilot -c android.intent.category.LAUNCHER 1 >/dev/null; sleep 4
+tap_text "Rules"; sleep 3
+scroll_top
+expect "Resumes by itself" 10 "Quick Settings tile pauses rules for an hour"
+shot e2e-tile-paused
+adb shell cmd statusbar click-tile $TILE >/dev/null 2>&1; sleep 3
+adb shell cmd statusbar collapse >/dev/null 2>&1
+adb shell monkey -p dev.basalt.autopilot -c android.intent.category.LAUNCHER 1 >/dev/null; sleep 4
+expect "Running on this phone" 10 "a second tap on the tile resumes"

@@ -30,7 +30,32 @@
       android:foregroundServiceType="specialUse">
       <property
         android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-        android:value="Watches charger, battery, headphone and Wi-Fi changes to run the user's automation rules." />
+        android:value="Watches charger, battery, battery saver, headphone and Wi-Fi changes to run the user's automation rules." />
+    </service>
+    <receiver
+        android:name="expo.modules.autopilotengine.StatusWidget"
+        android:exported="true"
+        android:label="Autopilot">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/autopilot_widget_info" />
+    </receiver>
+    <service
+        android:name="expo.modules.autopilotengine.PauseTileService"
+        android:exported="true"
+        android:icon="@drawable/ic_autopilot_stat"
+        android:label="Autopilot"
+        android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+      <intent-filter>
+        <action android:name="android.service.quicksettings.action.QS_TILE" />
+      </intent-filter>
+      <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true" />
     </service>
   </application>
+  <queries>
+    <intent>
+      <action android:name="android.intent.action.TTS_SERVICE" />
+    </intent>
+  </queries>
 </manifest>

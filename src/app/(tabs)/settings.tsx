@@ -5,6 +5,9 @@ import * as Linking from 'expo-linking';
 import { useRouter } from 'expo-router';
 import ClipboardPaste from 'lucide-react-native/icons/clipboard-paste';
 import Code from 'lucide-react-native/icons/code';
+import LayoutGrid from 'lucide-react-native/icons/layout-grid';
+import PanelTop from 'lucide-react-native/icons/panel-top';
+import SquareDashed from 'lucide-react-native/icons/layout-dashboard';
 import KeyRound from 'lucide-react-native/icons/key-round';
 import MapPin from 'lucide-react-native/icons/map-pin';
 import RefreshCw from 'lucide-react-native/icons/refresh-cw';
@@ -159,6 +162,13 @@ export default function Settings() {
           <Button label="Export rules" icon={Share2} variant="secondary" onPress={() => void exportAll()} style={{ flex: 1 }} />
           <Button label="Import" icon={ClipboardPaste} variant="secondary" onPress={() => void importFromClipboard()} style={{ flex: 1 }} />
         </View>
+      </Card>
+
+      <SectionTitle title="Quick access" />
+      <Card style={{ paddingVertical: 4 }}>
+        <ListItem title="Home-screen widget" subtitle="Long-press your home screen → Widgets → Autopilot. Shows what runs next, with a Pause/Resume button." icon={SquareDashed} />
+        <ListItem title="Quick Settings tile" subtitle="Pull down the shade twice, tap the pencil and add “Autopilot”. Tap it to pause for an hour or resume." icon={PanelTop} />
+        <ListItem title="Shortcuts on the app icon" subtitle="Long-press Autopilot’s icon for New rule and Recipes." icon={LayoutGrid} />
       </Card>
 
       <SectionTitle title="Appearance" />

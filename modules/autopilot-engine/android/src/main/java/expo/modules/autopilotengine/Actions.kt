@@ -45,6 +45,7 @@ object Actions {
     "flashlight" -> flashlight(context, a.optBoolean("on"))
     "vibrate" -> vibrate(context, a.optString("pattern", "short"))
     "autoRotate" -> autoRotate(context, a.optBoolean("on"))
+    "speak" -> Speech.say(context, a.optString("text", ""))
     "notify" -> notify(context, a.optString("title", "Autopilot"), a.optString("body", ""), a.optString("openPackage", ""))
     else -> "Unknown action"
   }

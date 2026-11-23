@@ -25,6 +25,7 @@ export const TRIGGER_LABELS: Record<TriggerType, string> = {
   headphones: 'Audio device',
   wifi: 'Wi-Fi',
   unlock: 'Phone unlocked',
+  powerSave: 'Battery saver',
 };
 
 export const ACTION_LABELS: Record<ActionType, string> = {
@@ -37,6 +38,7 @@ export const ACTION_LABELS: Record<ActionType, string> = {
   notify: 'Show a reminder',
   vibrate: 'Vibrate',
   autoRotate: 'Auto-rotate',
+  speak: 'Say out loud',
 };
 
 export function describeTrigger(t: Trigger): string {
@@ -57,6 +59,8 @@ export function describeTrigger(t: Trigger): string {
       return t.state === 'connected' ? 'When headphones or a Bluetooth audio device connect' : 'When headphones or a Bluetooth audio device disconnect';
     case 'unlock':
       return 'When you unlock the phone';
+    case 'powerSave':
+      return t.state === 'on' ? 'When battery saver turns on' : 'When battery saver turns off';
     case 'wifi': {
       const network = t.ssid.trim() ? `“${t.ssid.trim()}”` : 'any Wi-Fi';
       return t.state === 'connected' ? `When connecting to ${network}` : `When leaving ${network}`;
@@ -84,6 +88,8 @@ export function describeAction(a: Action): string {
       return `Vibrate (${a.pattern})`;
     case 'autoRotate':
       return a.on ? 'Auto-rotate on' : 'Auto-rotate off';
+    case 'speak':
+      return `Say “${a.text.trim().slice(0, 40) || '…'}”`;
   }
 }
 
@@ -107,7 +113,7 @@ export function requiredPermissions(rule: Pick<Rule, 'trigger' | 'actions'>): Pe
   const needs = new Set<PermissionNeed>();
   const t = rule.trigger.type;
   if (t === 'time' || t === 'prayer') needs.add('exactAlarms');
-  if (t === 'charging' || t === 'battery' || t === 'headphones' || t === 'wifi' || t === 'unlock') {
+  if (t === 'charging' || t === 'battery' || t === 'headphones' || t === 'wifi' || t === 'unlock' || t === 'powerSave') {
     needs.add('batteryUnrestricted');
     // Android shows a notice while the watcher runs; without notification permission it is hidden but still works.
   }
@@ -142,6 +148,7 @@ export function validate(rule: Rule): ValidationError[] {
   }
   for (const a of rule.actions) {
     if (a.type === 'notify' && !a.title.trim()) errors.push({ field: 'actions', message: 'Reminders need a title.' });
+    if (a.type === 'speak' && !a.text.trim()) errors.push({ field: 'actions', message: 'Type what Autopilot should say.' });
   }
   return errors;
 }

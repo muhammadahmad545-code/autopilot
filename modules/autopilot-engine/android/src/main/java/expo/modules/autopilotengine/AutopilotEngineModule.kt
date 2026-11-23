@@ -98,5 +98,24 @@ class AutopilotEngineModule : Module() {
 
     /** Re-arm alarms and the watcher, e.g. after the user grants a permission. */
     Function("refresh") { Engine.refresh(context) }
+
+    /** Long-press shortcuts on the launcher icon: New rule and Recipes. */
+    Function("installShortcuts") {
+      if (Build.VERSION.SDK_INT < 25) return@Function false
+      val manager = context.getSystemService(android.content.pm.ShortcutManager::class.java) ?: return@Function false
+      fun shortcut(id: String, path: String, label: String, icon: Int) =
+        android.content.pm.ShortcutInfo.Builder(context, id)
+          .setShortLabel(label)
+          .setIcon(android.graphics.drawable.Icon.createWithResource(context, icon))
+          .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse("autopilot://$path")).setPackage(context.packageName))
+          .build()
+      runCatching {
+        manager.dynamicShortcuts = listOf(
+          shortcut("new-rule", "rule/new", "New rule", R.drawable.ic_autopilot_shortcut_new),
+          shortcut("recipes", "recipes", "Recipes", R.drawable.ic_autopilot_shortcut_recipes),
+        )
+        true
+      }.getOrDefault(false)
+    }
   }
 }

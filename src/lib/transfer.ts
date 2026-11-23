@@ -1,8 +1,8 @@
 import type { Action, Rule, Trigger } from './types';
 import { validate } from './describe';
 
-const TRIGGERS = new Set(['time', 'prayer', 'charging', 'battery', 'headphones', 'wifi', 'unlock']);
-const ACTIONS = new Set(['ringer', 'dnd', 'mediaVolume', 'ringVolume', 'brightness', 'flashlight', 'notify', 'vibrate', 'autoRotate']);
+const TRIGGERS = new Set(['time', 'prayer', 'charging', 'battery', 'headphones', 'wifi', 'unlock', 'powerSave']);
+const ACTIONS = new Set(['ringer', 'dnd', 'mediaVolume', 'ringVolume', 'brightness', 'flashlight', 'notify', 'vibrate', 'autoRotate', 'speak']);
 
 export interface ExportFile {
   app: 'basalt-autopilot';

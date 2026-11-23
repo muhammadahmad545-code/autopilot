@@ -95,4 +95,16 @@ export const RECIPES: Recipe[] = [
     blurb: 'Silent at 13:15 on Fridays; pair it with a rule that turns the ringer back on.',
     rule: { name: 'Silent for Jumu’ah', trigger: { type: 'time', hour: 13, minute: 15, days: [5] }, actions: [{ type: 'ringer', mode: 'silent' }] },
   },
+  {
+    id: 'saver-dim',
+    title: 'Battery saver helper',
+    blurb: 'When battery saver turns on, dim the screen and lower media volume.',
+    rule: { name: 'Battery saver helper', trigger: { type: 'powerSave', state: 'on' }, actions: [{ type: 'brightness', percent: 20 }, { type: 'mediaVolume', percent: 30 }] },
+  },
+  {
+    id: 'speak-unplug',
+    title: 'Say “unplug”',
+    blurb: 'At 80% while charging, say out loud that it is time to unplug.',
+    rule: { name: 'Say unplug', trigger: { type: 'battery', direction: 'above', level: 80 }, actions: [{ type: 'speak', text: 'Battery is at 80 percent. You can unplug the charger.' }] },
+  },
 ];

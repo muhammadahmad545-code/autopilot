@@ -54,6 +54,10 @@ class WatchService : Service() {
         Intent.ACTION_POWER_CONNECTED -> emit(JSONObject().put("type", "charging").put("state", "connected").put("description", "Charger connected"))
         Intent.ACTION_POWER_DISCONNECTED -> emit(JSONObject().put("type", "charging").put("state", "disconnected").put("description", "Charger disconnected"))
         Intent.ACTION_USER_PRESENT -> emit(JSONObject().put("type", "unlock").put("description", "Phone unlocked"))
+        android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
+          val on = (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
+          emit(JSONObject().put("type", "powerSave").put("state", if (on) "on" else "off").put("description", if (on) "Battery saver turned on" else "Battery saver turned off"))
+        }
         Intent.ACTION_BATTERY_CHANGED -> {
           val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
           val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
@@ -81,6 +85,7 @@ class WatchService : Service() {
       addAction(Intent.ACTION_POWER_DISCONNECTED)
       addAction(Intent.ACTION_BATTERY_CHANGED)
       addAction(Intent.ACTION_USER_PRESENT)
+      addAction(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
     }
     ContextCompat.registerReceiver(this, systemReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     receiversRegistered = true
@@ -247,7 +252,7 @@ class WatchService : Service() {
       val nm = getSystemService(NotificationManager::class.java)
       if (Build.VERSION.SDK_INT >= 26 && nm.getNotificationChannel(CHANNEL) == null) {
         nm.createNotificationChannel(NotificationChannel(CHANNEL, "Watching triggers", NotificationManager.IMPORTANCE_MIN).apply {
-          description = "Shown while Autopilot listens for charger, battery, unlock, audio and Wi-Fi changes"
+          description = "Shown while Autopilot listens for charger, battery, battery saver, unlock, audio and Wi-Fi changes"
           setShowBadge(false)
         })
       }
@@ -273,7 +278,7 @@ class WatchService : Service() {
   }
 
   companion object {
-    val EVENT_TYPES = setOf("charging", "battery", "headphones", "wifi", "unlock")
+    val EVENT_TYPES = setOf("charging", "battery", "headphones", "wifi", "unlock", "powerSave")
     private const val CHANNEL = "autopilot_watch"
     private const val NOTIFICATION_ID = 4202
     private const val ACTION_STOP = "expo.modules.autopilotengine.STOP"

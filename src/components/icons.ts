@@ -1,4 +1,6 @@
 import BatteryMedium from 'lucide-react-native/icons/battery-medium';
+import Leaf from 'lucide-react-native/icons/leaf';
+import Speech from 'lucide-react-native/icons/speech';
 import BellRing from 'lucide-react-native/icons/bell-ring';
 import Clock from 'lucide-react-native/icons/clock';
 import Flashlight from 'lucide-react-native/icons/flashlight';
@@ -23,6 +25,7 @@ export const TRIGGER_ICONS: Record<TriggerType, LucideIcon> = {
   headphones: Headphones,
   wifi: Wifi,
   unlock: LockOpen,
+  powerSave: Leaf,
 };
 
 export const ACTION_ICONS: Record<ActionType, LucideIcon> = {
@@ -35,4 +38,5 @@ export const ACTION_ICONS: Record<ActionType, LucideIcon> = {
   notify: BellRing,
   vibrate: Smartphone,
   autoRotate: RotateCw,
+  speak: Speech,
 };

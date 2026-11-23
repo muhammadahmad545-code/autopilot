@@ -8,8 +8,8 @@ import Plus from 'lucide-react-native/icons/plus';
 import Sparkles from 'lucide-react-native/icons/sparkles';
 import Workflow from 'lucide-react-native/icons/workflow';
 import { useFocusEffect } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState, ScrollView, View } from 'react-native';
 import { TRIGGER_ICONS } from '../../components/icons';
 import { describeConditions, requiredPermissions, summarize } from '../../lib/describe';
 import { Engine, readPause, saveRules } from '../../lib/engine';
@@ -30,6 +30,13 @@ export default function Rules() {
   const [pauseMenu, setPauseMenu] = useState(false);
   const paused = pause.paused;
   useFocusEffect(useCallback(() => setPause(readPause()), []));
+  // The Quick Settings tile and the widget can pause or resume while the app is in the background.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setPause(readPause());
+    });
+    return () => sub.remove();
+  }, []);
   const [location] = locationSetting.use();
   const [method] = methodSetting.use();
   const [school] = schoolSetting.use();

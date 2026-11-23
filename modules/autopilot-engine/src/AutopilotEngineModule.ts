@@ -25,6 +25,8 @@ declare class AutopilotEngineModule extends NativeModule<Events> {
   getPermissions(): PermissionState;
   openPermission(which: PermissionKey | 'app'): boolean;
   refresh(): void;
+  /** Add New rule and Recipes to the launcher icon's long-press menu. */
+  installShortcuts(): boolean;
 }
 
 export default requireNativeModule<AutopilotEngineModule>('AutopilotEngine');

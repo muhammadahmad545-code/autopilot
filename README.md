@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon.png" width="112" alt="Autopilot logo: an aircraft attitude indicator"></p>
+
 # Autopilot
 
 “When this happens, do that” rules for your Android phone. Silence it for prayer, dim it at bedtime, remind you to unplug at 80%, go quiet when you reach the office. Everything runs on the phone: no account, no server, no tracking.
@@ -5,6 +7,16 @@
 **[Download the latest APK](https://github.com/muhammadahmad545-code/autopilot/releases/latest)**
 
 Pick the file ending in **`-arm64-v8a.apk`**: that is the right one for almost every phone from the last several years. `-armeabi-v7a.apk` is for older 32-bit phones and `-x86_64.apk` for emulators and Chromebooks. Installed apps update themselves to the matching file.
+
+## What's new in 1.3
+
+- **A real logo:** an aircraft attitude indicator, the instrument an autopilot flies by.
+- **Home-screen widget:** shows how many rules are on and what runs next, with a one-tap Pause/Resume.
+- **Quick Settings tile:** on while rules run; tap to pause for an hour, tap again to resume.
+- **Shortcuts on the app icon:** long-press for *New rule* and *Recipes*.
+- **New trigger:** battery saver turns on or off.
+- **New action:** say something out loud with the phone's text-to-speech voice.
+- **Two new recipes:** *Battery saver helper* and *Say “unplug”*.
 
 ## What's new in 1.2
 
@@ -73,8 +85,17 @@ Each is requested only when a rule needs it.
 | Alarms & reminders | Running time and prayer rules on the exact minute |
 | Unrestricted battery | Keeping event rules alive in the background |
 | Do Not Disturb access | Do Not Disturb and fully silent mode |
-| Modify system settings | Brightness |
+| Modify system settings | Brightness and auto-rotate |
 | Location | Matching a Wi-Fi network by name (Android treats the name as location) |
+
+Text-to-speech uses the voice already installed on the phone (usually Google's); nothing is sent anywhere.
+
+## Honest limits
+
+- Android may delay alarms in deep sleep; Autopilot runs late rules late (and logs how late) instead of skipping them, and logs rules missed while the phone was off.
+- Event rules (charger, battery, battery saver, audio, Wi-Fi, unlock) need the small “Autopilot is on” notification; without unrestricted battery use, some phone makers kill it.
+- Android does not let apps turn Wi-Fi, Bluetooth or mobile data on or off, so those are not actions.
+- *Say out loud* needs a text-to-speech voice on the phone and plays at the media volume.
 
 Installed from outside the Play Store on Android 13 or later? Android may block some of these as “restricted settings”. Open App info, tap ⋮, choose **Allow restricted settings**, then try again.
 

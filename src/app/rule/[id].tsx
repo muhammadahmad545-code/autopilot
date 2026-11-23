@@ -28,6 +28,7 @@ const DEFAULT_TRIGGERS: Record<TriggerType, Trigger> = {
   headphones: { type: 'headphones', state: 'connected' },
   wifi: { type: 'wifi', state: 'connected', ssid: '' },
   unlock: { type: 'unlock' },
+  powerSave: { type: 'powerSave', state: 'on' },
 };
 
 const DEFAULT_ACTIONS: Record<ActionType, Action> = {
@@ -40,6 +41,7 @@ const DEFAULT_ACTIONS: Record<ActionType, Action> = {
   notify: { type: 'notify', title: '', body: '' },
   vibrate: { type: 'vibrate', pattern: 'short' },
   autoRotate: { type: 'autoRotate', on: false },
+  speak: { type: 'speak', text: '' },
 };
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -231,6 +233,17 @@ export default function RuleEditor() {
           </>
         ) : null}
 
+        {t.type === 'powerSave' ? (
+          <SegmentedControl
+            options={[
+              { value: 'on', label: 'Turns on' },
+              { value: 'off', label: 'Turns off' },
+            ]}
+            value={t.state}
+            onChange={(state) => setTrigger({ ...t, state })}
+          />
+        ) : null}
+
         {t.type === 'unlock' ? (
           <Text variant="caption" color="textMuted">
             Runs each time you unlock the phone. Combine it with “Only between certain hours” below to limit it.
@@ -370,6 +383,17 @@ export default function RuleEditor() {
               ]}
               value={action.on ? 'on' : 'off'}
               onChange={(v) => setAction(index, { ...action, on: v === 'on' })}
+            />
+          ) : null}
+          {action.type === 'speak' ? (
+            <TextField
+              label="Words to say"
+              value={action.text}
+              onChangeText={(text) => setAction(index, { ...action, text })}
+              placeholder="Battery is at 80 percent. Unplug the charger."
+              multiline
+              maxLength={300}
+              hint="Spoken by the phone's text-to-speech voice, at the media volume."
             />
           ) : null}
           {action.type === 'notify' ? (

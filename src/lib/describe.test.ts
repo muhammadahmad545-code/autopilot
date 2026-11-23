@@ -44,3 +44,11 @@ test('every recipe is a valid rule apart from Wi-Fi names the user fills in', ()
     assert.deepEqual(validate({ ...recipe.rule, id: recipe.id, enabled: true, createdAt: 0 }), [], recipe.id);
   }
 });
+
+test('battery saver trigger and speak action describe and validate', () => {
+  const r = rule({ trigger: { type: 'powerSave', state: 'on' }, actions: [{ type: 'speak', text: 'Saving power' }] });
+  assert.equal(describeTrigger(r.trigger), 'When battery saver turns on');
+  assert.match(summarize(r), /Say “Saving power”/);
+  assert.deepEqual(requiredPermissions(r), ['batteryUnrestricted']);
+  assert.equal(validate(rule({ actions: [{ type: 'speak', text: '  ' }] }))[0].field, 'actions');
+});
