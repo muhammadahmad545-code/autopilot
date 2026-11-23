@@ -17,6 +17,7 @@ Pick the file ending in **`-arm64-v8a.apk`**: that is the right one for almost e
 - **New trigger:** battery saver turns on or off.
 - **New action:** say something out loud with the phone's text-to-speech voice.
 - **Two new recipes:** *Battery saver helper* and *Say “unplug”*.
+- **1.3.1:** a battery saver change runs its rules once (Android can announce the same change several times).
 
 ## What's new in 1.2
 

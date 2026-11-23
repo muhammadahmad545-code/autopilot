@@ -49,6 +49,8 @@ adb shell settings put global low_power 1; sleep 10
 tap_text "Activity"; sleep 4
 expect "Battery saver turned on" 15 "battery saver rule ran and was logged"
 shot e2e-power-save
+runs=$(grep -o 'text="Battery saver turned on"' "$OUT/e2e-power-save.xml" | wc -l | tr -d ' ')
+[ "$runs" = 1 ] && pass "battery saver rule runs once per change" || fail "battery saver rule runs once per change (logged $runs times)"
 adb shell settings put global low_power 0
 adb shell dumpsys battery reset >/dev/null 2>&1
 

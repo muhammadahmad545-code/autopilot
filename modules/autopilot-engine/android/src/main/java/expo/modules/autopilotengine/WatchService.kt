@@ -45,6 +45,8 @@ class WatchService : Service() {
   private var wifiNetwork: Network? = null
   private var wifiSsid: String? = null
   private var wifiAnnounced = false
+  /** Android can send the battery saver broadcast more than once per change; only real changes count. */
+  private var lastPowerSave: Boolean? = null
   private var pendingDisconnect: Runnable? = null
   private var pendingConnect: Runnable? = null
 
@@ -56,6 +58,8 @@ class WatchService : Service() {
         Intent.ACTION_USER_PRESENT -> emit(JSONObject().put("type", "unlock").put("description", "Phone unlocked"))
         android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> {
           val on = (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
+          if (on == lastPowerSave) return
+          lastPowerSave = on
           emit(JSONObject().put("type", "powerSave").put("state", if (on) "on" else "off").put("description", if (on) "Battery saver turned on" else "Battery saver turned off"))
         }
         Intent.ACTION_BATTERY_CHANGED -> {
@@ -80,6 +84,7 @@ class WatchService : Service() {
       stopSelf()
       return
     }
+    lastPowerSave = (getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
     val filter = IntentFilter().apply {
       addAction(Intent.ACTION_POWER_CONNECTED)
       addAction(Intent.ACTION_POWER_DISCONNECTED)
