@@ -67,12 +67,13 @@ adb shell cmd statusbar click-tile $TILE >/dev/null 2>&1; sleep 3
 adb shell cmd statusbar collapse >/dev/null 2>&1
 adb shell monkey -p dev.basalt.autopilot -c android.intent.category.LAUNCHER 1 >/dev/null; sleep 4
 tap_text "Rules"; sleep 3
-scroll_top
+scroll_top; scroll_top
 expect "Resumes by itself" 10 "Quick Settings tile pauses rules for an hour"
 shot e2e-tile-paused
 adb shell cmd statusbar click-tile $TILE >/dev/null 2>&1; sleep 3
 adb shell cmd statusbar collapse >/dev/null 2>&1
 adb shell monkey -p dev.basalt.autopilot -c android.intent.category.LAUNCHER 1 >/dev/null; sleep 4
+scroll_top; scroll_top
 expect "Running on this phone" 10 "a second tap on the tile resumes"
 
 # Appearance: change accent, font, background, depth and navigation; the screen previews the draft,
