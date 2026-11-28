@@ -14,6 +14,7 @@ import RefreshCw from 'lucide-react-native/icons/refresh-cw';
 import Share2 from 'lucide-react-native/icons/share-2';
 import ShieldCheck from 'lucide-react-native/icons/shield-check';
 import Sparkles from 'lucide-react-native/icons/sparkles';
+import Palette from 'lucide-react-native/icons/palette';
 import React, { useMemo, useState } from 'react';
 import { Share, View } from 'react-native';
 import { prayerHorizon, saveRules, syncEngine } from '../../lib/engine';
@@ -22,17 +23,13 @@ import { CITIES, METHODS, PRAYERS, PRAYER_LABELS, prayerTimes } from '../../lib/
 import type { CalcMethod } from '../../lib/prayer';
 import { REPO_URL, UPDATE_SOURCE, locationSetting, methodSetting, onboardedSetting, rulesSetting, schoolSetting } from '../../lib/settings';
 
-const THEMES = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-] as const;
+const THEME_LABEL = { system: 'System', light: 'Light', dark: 'Dark' } as const;
 
 export default function Settings() {
   const { spacing } = useTheme();
   const router = useRouter();
   const toast = useToast();
-  const [theme, setTheme] = themePreference.use();
+  const [theme] = themePreference.use();
   const [location, setLocation] = locationSetting.use();
   const [method, setMethod] = methodSetting.use();
   const [school, setSchool] = schoolSetting.use();
@@ -172,7 +169,9 @@ export default function Settings() {
       </Card>
 
       <SectionTitle title="Appearance" />
-      <SegmentedControl options={THEMES} value={theme} onChange={setTheme} />
+      <Card style={{ paddingVertical: spacing.xs }}>
+        <ListItem title="Appearance" subtitle={`${THEME_LABEL[theme]} theme · colour, font, text size, layout and motion`} icon={Palette} chevron onPress={() => router.push('/appearance')} />
+      </Card>
 
       <SectionTitle title="Updates" />
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
